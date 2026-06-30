@@ -1,0 +1,999 @@
+{
+  "output_format": "mp4",
+  "width": 1920,
+  "height": 1080,
+  "frame_rate": "30 fps",
+  "elements": [
+    {
+      "id": "8c8fb528-23ec-42bc-9a9e-4481900366e9",
+      "name": "BG-Music",
+      "type": "audio",
+      "track": 1,
+      "time": 0,
+      "duration": null,
+      "source": "https://cdn.creatomate.com/demo/music3.mp3",
+      "loop": true,
+      "audio_fade_out": 1.5
+    },
+    {
+      "id": "aa2e0235-d19a-4752-8798-ea59a272decd",
+      "name": "Intro",
+      "type": "composition",
+      "track": 2,
+      "time": 0,
+      "duration": 2.5,
+      "fill_color": "#0a0a0a",
+      "animations": [
+        {
+          "time": 0,
+          "duration": 0.4,
+          "easing": "quadratic-out",
+          "type": "fade"
+        }
+      ],
+      "elements": [
+        {
+          "id": "d3b6257f-72ab-441c-afd4-635e8df47026",
+          "type": "shape",
+          "track": 1,
+          "time": 0,
+          "duration": 2.5,
+          "width": "100%",
+          "height": "100%",
+          "path": "M 0 0 L 100 0 L 100 100 L 0 100 L 0 0 Z",
+          "fill_color": [
+            {
+              "offset": "0%",
+              "color": "#141414"
+            },
+            {
+              "offset": "100%",
+              "color": "#1f1f1f"
+            }
+          ]
+        },
+        {
+          "id": "d8e4d7c2-f172-46bf-ab32-1a3023ff8a29",
+          "name": "Accent-Bar",
+          "type": "shape",
+          "track": 2,
+          "time": 0,
+          "duration": 2.5,
+          "y": "62%",
+          "width": "18%",
+          "height": "0.6 vmin",
+          "x_anchor": "50%",
+          "y_anchor": "50%",
+          "path": "M 0 0 L 100 0 L 100 100 L 0 100 L 0 0 Z",
+          "fill_color": "#ff2d2d",
+          "animations": [
+            {
+              "time": 0.4,
+              "duration": 0.5,
+              "easing": "quadratic-out",
+              "type": "scale",
+              "fade": false,
+              "x_anchor": "50%",
+              "end_scale": "100% 100%",
+              "start_scale": "0% 100%"
+            }
+          ]
+        },
+        {
+          "id": "07f5c368-616f-403b-97a4-8cf014b2479a",
+          "name": "Dealer-Name",
+          "type": "text",
+          "track": 3,
+          "time": 0,
+          "duration": 2.5,
+          "y": "44%",
+          "width": "90%",
+          "x_alignment": "50%",
+          "y_alignment": "100%",
+          "text": "ÖRNEK OTOMOTİV",
+          "font_family": "Montserrat",
+          "font_weight": "800",
+          "font_size": "8 vmin",
+          "letter_spacing": "6%",
+          "fill_color": "#ffffff",
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0.1,
+              "duration": 0.7,
+              "easing": "quadratic-out",
+              "type": "text-slide",
+              "scope": "split-clip",
+              "split": "letter",
+              "overlap": "93%",
+              "direction": "up"
+            }
+          ]
+        },
+        {
+          "id": "270a742d-208d-49a0-8084-67804ff7d869",
+          "name": "Intro-Subtitle",
+          "type": "text",
+          "track": 4,
+          "time": 0,
+          "duration": 2.5,
+          "y": "68%",
+          "width": "90%",
+          "x_alignment": "50%",
+          "text": "HAFTANIN ÖNE ÇIKAN ARACI",
+          "font_family": "Roboto Condensed",
+          "font_weight": "500",
+          "font_size": "2.8 vmin",
+          "letter_spacing": "14%",
+          "fill_color": "#ff2d2d",
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0.7,
+              "duration": 0.6,
+              "easing": "quadratic-out",
+              "type": "fade"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "4c5f12f8-44b6-456a-8948-862da639bff6",
+      "name": "Hero",
+      "type": "composition",
+      "track": 2,
+      "time": 2.5,
+      "duration": 4,
+      "fill_color": "#000000",
+      "animations": [
+        {
+          "time": 0,
+          "duration": 0.4,
+          "easing": "quadratic-out",
+          "type": "fade"
+        }
+      ],
+      "elements": [
+        {
+          "id": "a5a4bc95-17b1-49d0-a2f5-4215dbc6d194",
+          "name": "Photo-1",
+          "type": "image",
+          "track": 1,
+          "time": 0,
+          "duration": 4,
+          "source": "https://cdn.creatomate.com/demo/image1.jpg",
+          "clip": true,
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 4,
+              "easing": "linear",
+              "type": "scale",
+              "fade": false,
+              "end_scale": "125%",
+              "start_scale": "110%"
+            }
+          ]
+        },
+        {
+          "id": "391a75a1-133f-4e76-a5a4-81b95af19b14",
+          "name": "Hero-Gradient",
+          "type": "shape",
+          "track": 2,
+          "time": 0,
+          "duration": 4,
+          "y": "100%",
+          "width": "100%",
+          "height": "55%",
+          "y_anchor": "100%",
+          "path": "M 0 0 L 100 0 L 100 100 L 0 100 L 0 0 Z",
+          "fill_color": [
+            {
+              "offset": "0%",
+              "color": "rgba(0,0,0,0)"
+            },
+            {
+              "offset": "100%",
+              "color": "rgba(0,0,0,0.88)"
+            }
+          ]
+        },
+        {
+          "id": "ef4e1b14-8a67-4050-a282-cfa006adf159",
+          "name": "Price-Tag",
+          "type": "text",
+          "track": 3,
+          "time": 0.5,
+          "duration": 3.5,
+          "x": "4%",
+          "y": "10%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "1.450.000 TL",
+          "font_family": "Montserrat",
+          "font_weight": "800",
+          "font_size": "5 vmin",
+          "background_color": "#ff2d2d",
+          "background_x_padding": "55%",
+          "background_y_padding": "40%",
+          "background_border_radius": "16%",
+          "fill_color": "#ffffff",
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.5,
+              "easing": "back-out",
+              "type": "slide",
+              "distance": "10%",
+              "direction": "0°"
+            },
+            {
+              "time": 0,
+              "duration": 0.4,
+              "type": "fade"
+            }
+          ]
+        },
+        {
+          "id": "850d8e01-a761-4088-ba2b-0a0948e1f856",
+          "name": "Side-Accent",
+          "type": "shape",
+          "track": 4,
+          "time": 0.6,
+          "duration": 3.4,
+          "x": "4%",
+          "y": "68%",
+          "width": "0.55 vmin",
+          "height": "14%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "path": "M 0 0 L 100 0 L 100 100 L 0 100 L 0 0 Z",
+          "fill_color": "#ff2d2d",
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.4,
+              "easing": "quadratic-out",
+              "type": "scale",
+              "fade": false,
+              "y_anchor": "0%",
+              "end_scale": "100% 100%",
+              "start_scale": "100% 0%"
+            }
+          ]
+        },
+        {
+          "id": "5f012c97-fec3-48b3-9c3b-04ee4099b2bb",
+          "name": "Car-Title",
+          "type": "text",
+          "track": 5,
+          "time": 0.65,
+          "duration": 3.35,
+          "x": "7%",
+          "y": "68%",
+          "width": "75%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "2021 BMW 320i M Sport",
+          "font_family": "Montserrat",
+          "font_weight": "800",
+          "font_size": "6 vmin",
+          "fill_color": "#ffffff",
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.55,
+              "easing": "quadratic-out",
+              "type": "text-slide",
+              "scope": "split-clip",
+              "split": "word",
+              "overlap": "85%",
+              "direction": "up"
+            }
+          ]
+        },
+        {
+          "id": "c5cab13d-d93d-4e0f-8df8-88195504ea18",
+          "name": "Car-Subtitle",
+          "type": "text",
+          "track": 6,
+          "time": 0.95,
+          "duration": 3.05,
+          "x": "7%",
+          "y": "82%",
+          "width": "80%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "Hatasız · Boyasız · Servis Bakımlı",
+          "font_family": "Roboto Condensed",
+          "font_weight": "500",
+          "font_size": "2.8 vmin",
+          "letter_spacing": "3%",
+          "fill_color": "#d0d0d0",
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.5,
+              "easing": "quadratic-out",
+              "type": "fade"
+            },
+            {
+              "time": 0,
+              "duration": 0.5,
+              "easing": "quadratic-out",
+              "type": "slide",
+              "distance": "3%",
+              "direction": "0°"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "6c6c718a-0f23-4e9d-b013-e8c0d0f75a55",
+      "name": "Specs",
+      "type": "composition",
+      "track": 2,
+      "time": 6.5,
+      "duration": 4.5,
+      "fill_color": "#0a0a0a",
+      "animations": [
+        {
+          "time": 0,
+          "duration": 0.4,
+          "easing": "quadratic-out",
+          "type": "fade"
+        }
+      ],
+      "elements": [
+        {
+          "id": "32485d3b-7191-4194-b4e0-6ac3928024e2",
+          "name": "Photo-2",
+          "type": "image",
+          "track": 1,
+          "time": 0,
+          "duration": 4.5,
+          "x": "62%",
+          "width": "76%",
+          "source": "https://cdn.creatomate.com/demo/image2.jpg",
+          "clip": true,
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 4.5,
+              "easing": "linear",
+              "type": "scale",
+              "fade": false,
+              "end_scale": "122%",
+              "start_scale": "112%"
+            },
+            {
+              "time": 0,
+              "duration": 0.6,
+              "easing": "quadratic-out",
+              "type": "slide",
+              "distance": "6%",
+              "direction": "270°"
+            }
+          ]
+        },
+        {
+          "id": "385309a6-6d05-4675-a58a-237da6d39340",
+          "name": "Specs-Panel",
+          "type": "shape",
+          "track": 2,
+          "time": 0,
+          "duration": 4.5,
+          "x": "0%",
+          "width": "42%",
+          "height": "100%",
+          "x_anchor": "0%",
+          "path": "M 0 0 L 100 0 L 100 100 L 0 100 L 0 0 Z",
+          "fill_color": [
+            {
+              "offset": "0%",
+              "color": "#141414"
+            },
+            {
+              "offset": "100%",
+              "color": "#0a0a0a"
+            }
+          ],
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.5,
+              "easing": "quadratic-out",
+              "type": "slide",
+              "distance": "8%",
+              "direction": "90°"
+            }
+          ]
+        },
+        {
+          "id": "ec448e08-1dba-409a-8fca-ac45d6fc355d",
+          "name": "Specs-Heading",
+          "type": "text",
+          "track": 3,
+          "time": 0.4,
+          "duration": 4.1,
+          "x": "4%",
+          "y": "14%",
+          "width": "34%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "TEKNİK ÖZELLİKLER",
+          "font_family": "Montserrat",
+          "font_weight": "800",
+          "font_size": "3 vmin",
+          "letter_spacing": "5%",
+          "fill_color": "#ff2d2d",
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.5,
+              "easing": "quadratic-out",
+              "type": "fade"
+            }
+          ]
+        },
+        {
+          "id": "92f562d3-a886-4764-8bf6-17834bda5729",
+          "name": "Spec1-Icon",
+          "type": "text",
+          "track": 4,
+          "time": 0.7,
+          "duration": 3.8,
+          "x": "5%",
+          "y": "28%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "⏱",
+          "font_size": "4 vmin",
+          "fill_color": "#ffffff",
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.45,
+              "easing": "back-out",
+              "type": "scale",
+              "end_scale": "100%",
+              "start_scale": "0%"
+            }
+          ]
+        },
+        {
+          "id": "08408c0e-b8ae-4e20-ae8f-098e08c1773a",
+          "name": "Spec1-Label",
+          "type": "text",
+          "track": 5,
+          "time": 0.8,
+          "duration": 3.7,
+          "x": "13%",
+          "y": "28%",
+          "width": "26%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "KİLOMETRE",
+          "font_family": "Roboto Condensed",
+          "font_size": "1.9 vmin",
+          "letter_spacing": "6%",
+          "fill_color": "#888888",
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.4,
+              "easing": "quadratic-out",
+              "type": "slide",
+              "distance": "4%",
+              "direction": "90°"
+            }
+          ]
+        },
+        {
+          "id": "2a8f8f71-cf37-48aa-9996-aa03c2e7c74c",
+          "name": "Spec1-Value",
+          "type": "text",
+          "track": 6,
+          "time": 0.85,
+          "duration": 3.65,
+          "x": "13%",
+          "y": "32%",
+          "width": "26%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "45.000 km",
+          "font_family": "Montserrat",
+          "font_weight": "700",
+          "font_size": "2.8 vmin",
+          "fill_color": "#ffffff",
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.4,
+              "easing": "quadratic-out",
+              "type": "fade"
+            }
+          ]
+        },
+        {
+          "id": "5749535c-d79f-42f2-b06f-dd93f8506936",
+          "name": "Spec2-Icon",
+          "type": "text",
+          "track": 7,
+          "time": 0.9,
+          "duration": 3.6,
+          "x": "5%",
+          "y": "43%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "⛽",
+          "font_size": "4 vmin",
+          "fill_color": "#ffffff",
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.45,
+              "easing": "back-out",
+              "type": "scale",
+              "end_scale": "100%",
+              "start_scale": "0%"
+            }
+          ]
+        },
+        {
+          "id": "a62b5414-75bc-44d9-8937-cde869b6479e",
+          "name": "Spec2-Label",
+          "type": "text",
+          "track": 8,
+          "time": 1,
+          "duration": 3.5,
+          "x": "13%",
+          "y": "43%",
+          "width": "26%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "YAKIT",
+          "font_family": "Roboto Condensed",
+          "font_size": "1.9 vmin",
+          "letter_spacing": "6%",
+          "fill_color": "#888888",
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.4,
+              "easing": "quadratic-out",
+              "type": "slide",
+              "distance": "4%",
+              "direction": "90°"
+            }
+          ]
+        },
+        {
+          "id": "dcc983d5-6c0f-46ff-9703-f3f33f567d54",
+          "name": "Spec2-Value",
+          "type": "text",
+          "track": 9,
+          "time": 1.05,
+          "duration": 3.45,
+          "x": "13%",
+          "y": "47%",
+          "width": "26%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "Benzin",
+          "font_family": "Montserrat",
+          "font_weight": "700",
+          "font_size": "2.8 vmin",
+          "fill_color": "#ffffff",
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.4,
+              "easing": "quadratic-out",
+              "type": "fade"
+            }
+          ]
+        },
+        {
+          "id": "96c4f96e-a938-4bfd-aeba-ea475d6c0348",
+          "name": "Spec3-Icon",
+          "type": "text",
+          "track": 10,
+          "time": 1.1,
+          "duration": 3.4,
+          "x": "5%",
+          "y": "58%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "⚙",
+          "font_size": "4 vmin",
+          "fill_color": "#ffffff",
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.45,
+              "easing": "back-out",
+              "type": "scale",
+              "end_scale": "100%",
+              "start_scale": "0%"
+            }
+          ]
+        },
+        {
+          "id": "c6680d9c-acb3-4e35-8a8d-92c49ae02ff5",
+          "name": "Spec3-Label",
+          "type": "text",
+          "track": 11,
+          "time": 1.2,
+          "duration": 3.3,
+          "x": "13%",
+          "y": "58%",
+          "width": "26%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "VİTES",
+          "font_family": "Roboto Condensed",
+          "font_size": "1.9 vmin",
+          "letter_spacing": "6%",
+          "fill_color": "#888888",
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.4,
+              "easing": "quadratic-out",
+              "type": "slide",
+              "distance": "4%",
+              "direction": "90°"
+            }
+          ]
+        },
+        {
+          "id": "2684eb77-38ef-484d-88f5-35efded26511",
+          "name": "Spec3-Value",
+          "type": "text",
+          "track": 12,
+          "time": 1.25,
+          "duration": 3.25,
+          "x": "13%",
+          "y": "62%",
+          "width": "26%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "Otomatik",
+          "font_family": "Montserrat",
+          "font_weight": "700",
+          "font_size": "2.8 vmin",
+          "fill_color": "#ffffff",
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.4,
+              "easing": "quadratic-out",
+              "type": "fade"
+            }
+          ]
+        },
+        {
+          "id": "1204a307-0239-464a-9772-ab5c97e5a9c8",
+          "name": "Spec4-Icon",
+          "type": "text",
+          "track": 13,
+          "time": 1.3,
+          "duration": 3.2,
+          "x": "5%",
+          "y": "73%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "📅",
+          "font_size": "4 vmin",
+          "fill_color": "#ffffff",
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.45,
+              "easing": "back-out",
+              "type": "scale",
+              "end_scale": "100%",
+              "start_scale": "0%"
+            }
+          ]
+        },
+        {
+          "id": "6c553a1f-4a8e-4a02-af35-e28435bbb34f",
+          "name": "Spec4-Label",
+          "type": "text",
+          "track": 14,
+          "time": 1.4,
+          "duration": 3.1,
+          "x": "13%",
+          "y": "73%",
+          "width": "26%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "MODEL YILI",
+          "font_family": "Roboto Condensed",
+          "font_size": "1.9 vmin",
+          "letter_spacing": "6%",
+          "fill_color": "#888888",
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.4,
+              "easing": "quadratic-out",
+              "type": "slide",
+              "distance": "4%",
+              "direction": "90°"
+            }
+          ]
+        },
+        {
+          "id": "a4f5ffdc-76d9-462f-86d3-e665c0600156",
+          "name": "Spec4-Value",
+          "type": "text",
+          "track": 15,
+          "time": 1.45,
+          "duration": 3.05,
+          "x": "13%",
+          "y": "77%",
+          "width": "26%",
+          "x_anchor": "0%",
+          "y_anchor": "0%",
+          "text": "2021",
+          "font_family": "Montserrat",
+          "font_weight": "700",
+          "font_size": "2.8 vmin",
+          "fill_color": "#ffffff",
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.4,
+              "easing": "quadratic-out",
+              "type": "fade"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "f06f008c-98a0-48a2-9969-ccf25f581433",
+      "name": "Gallery",
+      "type": "composition",
+      "track": 2,
+      "time": 11,
+      "duration": 4.5,
+      "fill_color": "#0a0a0a",
+      "animations": [
+        {
+          "time": 0,
+          "duration": 0.4,
+          "easing": "quadratic-out",
+          "type": "fade"
+        }
+      ],
+      "elements": [
+        {
+          "id": "86a6dfd7-975c-4f66-8d61-6d7ad6c5828b",
+          "name": "Photo-3",
+          "type": "image",
+          "track": 1,
+          "time": 0,
+          "duration": 4.5,
+          "x": "25%",
+          "width": "50%",
+          "source": "https://cdn.creatomate.com/demo/image3.jpg",
+          "clip": true,
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 4.5,
+              "easing": "linear",
+              "type": "scale",
+              "fade": false,
+              "end_scale": "128%",
+              "start_scale": "115%"
+            }
+          ]
+        },
+        {
+          "id": "4aa2b629-eecc-44d2-bc50-98bcaa70c22e",
+          "name": "Photo-4",
+          "type": "image",
+          "track": 2,
+          "time": 0,
+          "duration": 4.5,
+          "x": "75%",
+          "width": "50%",
+          "source": "https://cdn.creatomate.com/demo/image1.jpg",
+          "clip": true,
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 4.5,
+              "easing": "linear",
+              "type": "scale",
+              "fade": false,
+              "end_scale": "128%",
+              "start_scale": "115%"
+            }
+          ]
+        },
+        {
+          "id": "14aa2d74-f99d-465f-a7d5-fd768b34c4c7",
+          "name": "Center-Line",
+          "type": "shape",
+          "track": 3,
+          "time": 0,
+          "duration": 4.5,
+          "width": "0.4 vmin",
+          "height": "100%",
+          "x_anchor": "50%",
+          "path": "M 0 0 L 100 0 L 100 100 L 0 100 L 0 0 Z"
+        },
+        {
+          "id": "c64bb5be-fa0c-4c03-8553-c4b617b5e470",
+          "name": "Gallery-Label",
+          "type": "text",
+          "track": 4,
+          "time": 0.4,
+          "duration": 4.1,
+          "y": "8%",
+          "width": "60%",
+          "y_anchor": "0%",
+          "x_alignment": "50%",
+          "text": "DAHA FAZLA DETAY",
+          "font_family": "Montserrat",
+          "font_weight": "800",
+          "font_size": "3 vmin",
+          "letter_spacing": "8%",
+          "background_color": "rgba(0,0,0,0.55)",
+          "background_x_padding": "40%",
+          "background_y_padding": "45%",
+          "background_border_radius": "30%",
+          "fill_color": "#ffffff",
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.5,
+              "easing": "quadratic-out",
+              "type": "fade"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "e0b3ca1b-bc85-4d1c-8665-f9f91f0d2cf4",
+      "name": "Outro",
+      "type": "composition",
+      "track": 2,
+      "time": 15.5,
+      "duration": 3,
+      "fill_color": "#0a0a0a",
+      "animations": [
+        {
+          "time": 0,
+          "duration": 0.4,
+          "easing": "quadratic-out",
+          "type": "fade"
+        }
+      ],
+      "elements": [
+        {
+          "id": "b6a63cbe-31c9-4964-9005-9c41d25f78ec",
+          "type": "shape",
+          "track": 1,
+          "time": 0,
+          "duration": 3,
+          "width": "100%",
+          "height": "100%",
+          "path": "M 0 0 L 100 0 L 100 100 L 0 100 L 0 0 Z",
+          "fill_color": [
+            {
+              "offset": "0%",
+              "color": "#1f1f1f"
+            },
+            {
+              "offset": "100%",
+              "color": "#0a0a0a"
+            }
+          ]
+        },
+        {
+          "id": "bdc59186-66b8-499e-b371-bde37399aaba",
+          "name": "CTA-Main",
+          "type": "text",
+          "track": 2,
+          "time": 0,
+          "duration": 3,
+          "y": "38%",
+          "width": "90%",
+          "x_alignment": "50%",
+          "y_alignment": "100%",
+          "text": "HEMEN ARAYIN",
+          "font_family": "Montserrat",
+          "font_weight": "800",
+          "font_size": "8 vmin",
+          "fill_color": "#ffffff",
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0,
+              "duration": 0.6,
+              "easing": "back-out",
+              "type": "scale",
+              "end_scale": "100%",
+              "start_scale": "55%"
+            },
+            {
+              "time": 0,
+              "duration": 0.4,
+              "type": "fade"
+            }
+          ]
+        },
+        {
+          "id": "1439ce31-bb97-46f9-98d5-e3ed973b28a5",
+          "name": "Phone",
+          "type": "text",
+          "track": 3,
+          "time": 0,
+          "duration": 3,
+          "y": "54%",
+          "width": "90%",
+          "x_alignment": "50%",
+          "text": "0212 555 12 34",
+          "font_family": "Roboto Condensed",
+          "font_weight": "700",
+          "font_size": "5 vmin",
+          "letter_spacing": "5%",
+          "fill_color": "#ff2d2d",
+          "dynamic": true,
+          "animations": [
+            {
+              "time": 0.4,
+              "duration": 0.5,
+              "easing": "quadratic-out",
+              "type": "fade"
+            }
+          ]
+        },
+        {
+          "id": "d176c46f-5c65-42d3-8cb3-ae1164cefea2",
+          "name": "Address",
+          "type": "text",
+          "track": 4,
+          "time": 0,
+          "duration": 3,
+          "y": "66%",
+          "width": "90%",
+          "x_alignment": "50%",
+          "text": "Bağdat Cad. No:123, Kadıköy / İstanbul",
+          "font_family": "Roboto Condensed",
+          "font_size": "2.6 vmin",
+          "fill_color": "#aaaaaa",
+          "animations": [
+            {
+              "time": 0.6,
+              "duration": 0.5,
+              "easing": "quadratic-out",
+              "type": "fade"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

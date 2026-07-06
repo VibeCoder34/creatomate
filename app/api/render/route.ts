@@ -2,12 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   buildRenderScript,
   type CarVideoFormData,
+  type TemplateStyle,
   type VideoFormat,
 } from "@/app/lib/template";
+import { getPublicBaseUrl, isPubliclyReachable } from "@/lib/publicBaseUrl";
+import { resolveVoiceoverSourceForCreatomate } from "@/lib/resolveVoiceoverSource";
 
 const CREATOMATE_API_URL = "https://api.creatomate.com/v2/renders";
 const POLL_INTERVAL_MS = 3000;
-const MAX_ATTEMPTS = 40;
+const MAX_ATTEMPTS = 60;
+const PENDING_RENDER_STATUSES = new Set(["planned", "waiting", "rendering"]);
+
+export const maxDuration = 300;
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 const MIN_PHOTOS = 8;
 const MAX_PHOTOS = 15;
 
@@ -16,10 +24,35 @@ type CreatomateRender = {
   status: string;
   url?: string;
   error_message?: string;
+  width?: number;
+  height?: number;
+  render_scale?: number;
 };
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseCreatomateErrorBody(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "Creatomate render hatası";
+  try {
+    const j = JSON.parse(trimmed) as {
+      hint?: string;
+      error?: string;
+      message?: string;
+    };
+    return j.hint ?? j.error ?? j.message ?? trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
+function formatRenderFailure(render: CreatomateRender): string {
+  return (
+    render.error_message?.trim() ||
+    "Render başarısız. Creatomate hesabınızda kredi veya entegrasyon sorunu olabilir."
+  );
 }
 
 function parseRenderResponse(data: unknown): CreatomateRender | null {
@@ -40,6 +73,33 @@ function normalizePhotos(photos: unknown): string[] {
     .filter(Boolean);
 }
 
+type RenderRequestBody = CarVideoFormData & {
+  voiceoverText?: string;
+  voiceoverLanguage?: string;
+};
+
+function resolveMusicSource(request: NextRequest, musicSource?: string): string | undefined {
+  if (!musicSource?.trim()) return undefined;
+  const trimmed = musicSource.trim();
+  const publicBase = getPublicBaseUrl(request);
+
+  try {
+    const u = new URL(trimmed);
+    const isLocal =
+      u.hostname === "localhost" ||
+      u.hostname === "127.0.0.1" ||
+      u.hostname === "::1";
+    if (isLocal && isPubliclyReachable(publicBase)) {
+      return `${publicBase}${u.pathname}`;
+    }
+    if (isLocal) return undefined;
+  } catch {
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const apiKey = process.env.CREATOMATE_API_KEY;
@@ -51,10 +111,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = (await request.json()) as CarVideoFormData;
+    const body = (await request.json()) as RenderRequestBody;
     const photos = normalizePhotos(body.photos);
     const format: VideoFormat =
       body.format === "youtube" ? "youtube" : "reels";
+    const templateStyle: TemplateStyle =
+      body.templateStyle === "dynamic" ? "dynamic" : "classic";
 
     if (photos.length < MIN_PHOTOS) {
       return NextResponse.json(
@@ -68,6 +130,15 @@ export async function POST(request: NextRequest) {
         { error: "En fazla 15 fotoğraf eklenebilir" },
         { status: 400 },
       );
+    }
+
+    const voiceoverText = body.voiceoverText?.trim();
+    let voiceoverAudioSource: string | undefined;
+
+    if (!voiceoverText) {
+      voiceoverAudioSource = await resolveVoiceoverSourceForCreatomate(request, {
+        voiceoverAudioSource: body.voiceoverAudioSource,
+      });
     }
 
     const formData: CarVideoFormData = {
@@ -85,6 +156,12 @@ export async function POST(request: NextRequest) {
       address: body.address ?? "",
       photos,
       format,
+      templateStyle,
+      musicSource: resolveMusicSource(request, body.musicSource),
+      voiceoverText,
+      voiceoverLanguage: body.voiceoverLanguage,
+      voiceoverAudioSource,
+      musicVolume: body.musicVolume,
     };
 
     const source = buildRenderScript(formData, format);
@@ -95,13 +172,16 @@ export async function POST(request: NextRequest) {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(source),
+      body: JSON.stringify({
+        ...source,
+        render_scale: 1,
+      }),
     });
 
     if (!createResponse.ok) {
       const errorText = await createResponse.text();
       return NextResponse.json(
-        { error: `Creatomate render isteği başarısız: ${errorText}` },
+        { error: parseCreatomateErrorBody(errorText) },
         { status: 500 },
       );
     }
@@ -118,10 +198,7 @@ export async function POST(request: NextRequest) {
 
     let attempts = 0;
 
-    while (
-      (render.status === "planned" || render.status === "rendering") &&
-      attempts < MAX_ATTEMPTS
-    ) {
+    while (PENDING_RENDER_STATUSES.has(render.status) && attempts < MAX_ATTEMPTS) {
       await sleep(POLL_INTERVAL_MS);
       attempts++;
 
@@ -137,7 +214,7 @@ export async function POST(request: NextRequest) {
       if (!pollResponse.ok) {
         const errorText = await pollResponse.text();
         return NextResponse.json(
-          { error: `Render durumu alınamadı: ${errorText}` },
+          { error: parseCreatomateErrorBody(errorText) },
           { status: 500 },
         );
       }
@@ -146,7 +223,7 @@ export async function POST(request: NextRequest) {
 
       if (render.status === "failed") {
         return NextResponse.json(
-          { error: render.error_message || "Render başarısız" },
+          { error: formatRenderFailure(render) },
           { status: 500 },
         );
       }
@@ -157,10 +234,13 @@ export async function POST(request: NextRequest) {
         url: render.url,
         status: render.status,
         id: render.id,
+        width: render.width,
+        height: render.height,
+        render_scale: render.render_scale,
       });
     }
 
-    if (render.status === "planned" || render.status === "rendering") {
+    if (PENDING_RENDER_STATUSES.has(render.status)) {
       return NextResponse.json(
         { error: "Render zaman aşımına uğradı" },
         { status: 504 },
@@ -168,7 +248,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: render.error_message || "Render başarısız" },
+      { error: formatRenderFailure(render) },
       { status: 500 },
     );
   } catch (error) {

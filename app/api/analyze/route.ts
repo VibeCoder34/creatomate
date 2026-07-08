@@ -120,7 +120,10 @@ export async function POST(req: NextRequest) {
     const videoLanguage: LanguageCode = parseLanguageCode(body.videoLanguage, "tr");
     const userNotes = String(body.userNotes ?? "").trim().slice(0, 800);
     const voiceoverEnabled = body.voiceover === true;
-    const voiceoverLanguage: LanguageCode = parseLanguageCode(body.voiceoverLanguage, "tr");
+    const voiceoverLanguage: LanguageCode = parseLanguageCode(
+      body.voiceoverLanguage ?? body.videoLanguage,
+      "tr",
+    );
     const photos: PhotoInput[] = body.photos ?? body.frames?.map((f: { index: number; base64Frames?: string[] }) => ({
       index: f.index,
       base64: f.base64Frames?.[0] ?? "",

@@ -1,10 +1,39 @@
 // Creatomate RenderScript — araba tanıtım videosu (örnek şablona göre)
 
 import {
+  estimateTextDuration,
+  MAX_VIDEO_SECONDS,
+  MIN_VIDEO_SECONDS,
+  scaleMiddleDurations,
+  voiceBlockDuration,
+  VO_GAP_SEC,
+} from "@/lib/voiceoverTiming";
+import { isPlaceholderDealerName, videoTemplateStrings } from "@/lib/videoTemplateI18n";
+import {
+  aspectRatioForFormat,
+  collectSpecChunks,
+  collectSpecLines,
+  collectDisplaySpecLines,
+  formatDimensions,
+  heroTypography,
+  introTypography,
+  layoutProfile,
+  MAX_SPEC_SCENES,
+  outroTypography,
+  splitLayoutFor,
+  truncateSubtitle,
+  truncateTitle,
+  truncateLabel,
+  type SpecChunk,
+  type SpecLine,
+} from "@/lib/templateFormat";
+import {
   buildCreatomateElevenLabsProvider,
   parseTtsLanguage,
   type TtsLanguage,
 } from "@/lib/elevenlabs";
+
+export { aspectRatioForFormat, formatDimensions };
 
 export const COLORS = {
   bg: "#0a0a0a",
@@ -17,8 +46,37 @@ export const COLORS = {
   textSoft: "#d0d0d0",
 } as const;
 
+const COLORS_MODERN = {
+  bg: "#081018",
+  panel: "#0a455a",
+  panelLight: "#0d5a73",
+  accent: "#f27420",
+  text: "#ffffff",
+  textMuted: "#a8c5d4",
+  textDim: "#7fa3b5",
+  textSoft: "#e8f4fa",
+} as const;
+
+type Palette = {
+  bg: string;
+  panel: string;
+  panelLight: string;
+  accent: string;
+  text: string;
+  textMuted: string;
+  textDim: string;
+  textSoft: string;
+};
+
+function colorsFor(style: TemplateStyle): Palette {
+  return style === "dynamic" ? COLORS_MODERN : COLORS;
+}
+
+function isPortraitStack(format: VideoFormat): boolean {
+  return format === "reels" || format === "square";
+}
+
 const MUSIC_SOURCE = "https://cdn.creatomate.com/demo/music3.mp3";
-const MIN_VIDEO_DURATION = 30;
 
 const BASE_DURATION = {
   intro: 2.5,
@@ -38,7 +96,7 @@ const SCENE_FADE = {
 
 // ─── Tipler ──────────────────────────────────────────────────────────────────
 
-export type VideoFormat = "reels" | "youtube";
+export type VideoFormat = "reels" | "youtube" | "square";
 export type TemplateStyle = "classic" | "dynamic";
 
 export type CarVideoFormData = {
@@ -51,18 +109,36 @@ export type CarVideoFormData = {
   specFuel: string;
   specGear: string;
   specYear: string;
+  specMotor?: string;
+  specColor?: string;
+  specBody?: string;
+  specSeries?: string;
+  specEnginePower?: string;
+  specEngineVolume?: string;
+  specDrivetrain?: string;
+  specCondition?: string;
+  specWarranty?: string;
+  specDamage?: string;
   ctaMain: string;
   phone: string;
   address: string;
   photos: string[];
   format: VideoFormat;
   templateStyle: TemplateStyle;
+  /** Videodaki sabit metinlerin dili */
+  videoLanguage?: string;
   /** Özel müzik URL (yoksa varsayılan Creatomate demo müziği) */
   musicSource?: string;
   /** Harici ses dosyası URL (yedek yol) */
   voiceoverAudioSource?: string;
-  /** Creatomate içinde ElevenLabs ile üretilecek seslendirme metni */
+  /** Creatomate içinde ElevenLabs ile üretilecek seslendirme metni (tek parça — yedek) */
   voiceoverText?: string;
+  /** photos[] ile aynı sırada — sahne bazlı seslendirme */
+  photoVoiceovers?: string[];
+  /** Fotoğraf başına TTS süresi (saniye) */
+  photoVoiceoverDurations?: number[];
+  /** Önceden üretilmiş ses URL'leri (varsa Creatomate provider yerine) */
+  photoVoiceoverSources?: string[];
   voiceoverLanguage?: string;
   /** Arka plan müziği seviyesi 0–1 */
   musicVolume?: number;
@@ -100,37 +176,36 @@ type MiddleScene =
       infoVariant: number;
     };
 
-type ScenePlan = {
-  name: string;
-  duration: number;
-  build: (time: number) => RenderElement;
-};
-
 // ─── Fotoğraf planlama ────────────────────────────────────────────────────────
 
 /**
- * Foto 1 → hero, foto 2 → specs.
- * Kalan fotoğraflar: önce 3'lü/2'li split sahneler, tek kalan → showcase.
+ * Foto 1 → hero, foto 2+ → spec chunk sahneleri (buildSceneSchedule).
+ * Kalan fotoğraflar: split / showcase galeri sahneleri.
  */
-export function planMiddleScenes(photos: string[]): MiddleScene[] {
+export function planMiddleScenes(
+  photos: string[],
+  format: VideoFormat = "reels",
+  galleryStartIndex = 2,
+): MiddleScene[] {
   const total = photos.length;
-  const rest = photos.slice(2);
+  const rest = photos.slice(galleryStartIndex);
   const scenes: MiddleScene[] = [];
+  const allowTrio = format === "youtube";
   let i = 0;
   let infoVariant = 0;
   let pattern = 0;
 
   while (i < rest.length) {
     const left = rest.length - i;
-    const baseNum = i + 3;
+    const baseNum = i + galleryStartIndex + 1;
 
-    if (left >= 3 && pattern % 2 === 0) {
+    if (left >= 3 && pattern % 2 === 0 && allowTrio) {
       scenes.push({
         kind: "split-trio",
         urls: [rest[i], rest[i + 1], rest[i + 2]],
         photoNumbers: [baseNum, baseNum + 1, baseNum + 2],
         totalPhotos: total,
-        infoVariant: infoVariant % 3,
+        infoVariant,
       });
       i += 3;
     } else if (left >= 2) {
@@ -139,7 +214,7 @@ export function planMiddleScenes(photos: string[]): MiddleScene[] {
         urls: [rest[i], rest[i + 1]],
         photoNumbers: [baseNum, baseNum + 1],
         totalPhotos: total,
-        infoVariant: infoVariant % 3,
+        infoVariant,
       });
       i += 2;
     } else {
@@ -159,30 +234,189 @@ export function planMiddleScenes(photos: string[]): MiddleScene[] {
   return scenes;
 }
 
+/** Split panel içeriği: araç özeti → spec grupları → özet */
+export function splitInfoCycleLength(chunkCount: number): number {
+  return Math.max(3, chunkCount + 2);
+}
+
+function normalizeInfoVariant(infoVariant: number, chunkCount: number): number {
+  const cycle = splitInfoCycleLength(chunkCount);
+  return ((infoVariant % cycle) + cycle) % cycle;
+}
+
 /** @deprecated planMiddleScenes kullanın */
 export function planShowcaseScenes(photos: string[]): MiddleScene[] {
   return planMiddleScenes(photos);
 }
 
-function calcMiddleSceneDuration(sceneCount: number): number {
+function calcMiddleSceneDuration(sceneCount: number, specSceneCount: number): number {
   const fixed =
     BASE_DURATION.intro +
     BASE_DURATION.hero +
-    BASE_DURATION.specs +
+    BASE_DURATION.specs * specSceneCount +
     BASE_DURATION.outro;
 
   if (sceneCount === 0) {
     return BASE_DURATION.showcase;
   }
 
-  const needed = MIN_VIDEO_DURATION - fixed;
+  const needed = MIN_VIDEO_SECONDS - fixed;
   return Math.max(3, needed / sceneCount);
 }
 
-function formatDimensions(format: VideoFormat): { width: number; height: number } {
-  return format === "reels"
-    ? { width: 1080, height: 1920 }
-    : { width: 1920, height: 1080 };
+function specFontSize(format: VideoFormat, compact: boolean): string {
+  if (format === "youtube") return compact ? "2.1 vmin" : "2.4 vmin";
+  if (format === "square") return compact ? "2.2 vmin" : "2.5 vmin";
+  return compact ? "2.3 vmin" : "2.6 vmin";
+}
+
+function specGridMetrics(format: VideoFormat, columns: 1 | 2): { valueOffset: number; rowStep: number } {
+  if (columns === 2) {
+    return {
+      valueOffset: 3.2,
+      rowStep: format === "youtube" ? 9.8 : 8.8,
+    };
+  }
+  return {
+    valueOffset: 3.5,
+    rowStep: format === "youtube" ? 10.5 : format === "square" ? 9.8 : 10,
+  };
+}
+
+function planSpecGridLayout(
+  lineCount: number,
+  format: VideoFormat,
+  scene: "specs" | "split",
+): {
+  columns: 1 | 2;
+  x: string;
+  col2X: string;
+  colWidth: string;
+  yStart: number;
+} {
+  const portrait = format !== "youtube";
+  const columns: 1 | 2 = lineCount >= 4 ? 2 : 1;
+  const { rowStep, valueOffset } = specGridMetrics(format, columns);
+  const rows = columns === 2 ? Math.ceil(lineCount / 2) : lineCount;
+  const contentHeight = rows * rowStep + valueOffset;
+
+  if (!portrait) {
+    const headingBottom = scene === "specs" ? 18 : 26;
+    const regionBottom = 92;
+    const avail = regionBottom - headingBottom;
+    const yStart = headingBottom + Math.max(0, (avail - contentHeight) / 2);
+    return {
+      columns,
+      x: "4%",
+      col2X: "21%",
+      colWidth: "15%",
+      yStart,
+    };
+  }
+
+  if (scene === "specs") {
+    const panelHeight = format === "square" ? 46 : 48;
+    const headingSpace = 13;
+    const yStart = headingSpace + Math.max(0, (panelHeight - headingSpace - contentHeight) / 2);
+    return {
+      columns,
+      x: "5%",
+      col2X: "52%",
+      colWidth: "42%",
+      yStart,
+    };
+  }
+
+  const panelTop = format === "square" ? 56 : 58;
+  const contentTop = panelTop + 12;
+  const panelBottom = 96;
+  const avail = panelBottom - contentTop;
+  const yStart = contentTop + Math.max(0, (avail - contentHeight) / 2);
+  return {
+    columns,
+    x: "5%",
+    col2X: "52%",
+    colWidth: "42%",
+    yStart,
+  };
+}
+
+function buildSpecGridElements(
+  lines: SpecLine[],
+  duration: number,
+  format: VideoFormat,
+  style: TemplateStyle,
+  trackStart: number,
+  palette: Palette,
+  opts: {
+    x: string;
+    yStart: number;
+    width: string;
+    columns: 1 | 2;
+    rowStep?: number;
+    col2X?: string;
+    colWidth?: string;
+  },
+): RenderElement[] {
+  const dynamic = style === "dynamic";
+  const elements: RenderElement[] = [];
+  const { valueOffset, rowStep } = {
+    ...specGridMetrics(format, opts.columns),
+    ...(opts.rowStep !== undefined ? { rowStep: opts.rowStep } : {}),
+  };
+  const col2X = opts.col2X ?? "52%";
+  const twoColWidth = opts.colWidth ?? "46%";
+
+  lines.forEach((line, index) => {
+    const col = opts.columns === 2 ? index % 2 : 0;
+    const row = opts.columns === 2 ? Math.floor(index / 2) : index;
+    const x = opts.columns === 2 ? (col === 0 ? opts.x : col2X) : opts.x;
+    const y = opts.yStart + row * rowStep;
+    const colWidth = opts.columns === 2 ? twoColWidth : opts.width;
+
+    elements.push(
+      {
+        name: `Spec-${line.label}-Label`,
+        type: "text",
+        track: trackStart + index * 2,
+        time: 0.15 + index * 0.05,
+        duration: duration - 0.15,
+        x,
+        y: `${y}%`,
+        width: colWidth,
+        x_anchor: "0%",
+        y_anchor: "0%",
+        text: `${line.icon} ${line.label}`,
+        font_family: "Roboto Condensed",
+        font_size: specFontSize(format, true),
+        letter_spacing: "4%",
+        line_height: "110%",
+        fill_color: palette.textDim,
+        animations: dynamic ? [slideIn("90°", 0)] : [quickFade(0)],
+      },
+      {
+        name: `Spec-${line.label}-Value`,
+        type: "text",
+        track: trackStart + index * 2 + 1,
+        time: 0.2 + index * 0.05,
+        duration: duration - 0.2,
+        x,
+        y: `${y + valueOffset}%`,
+        width: colWidth,
+        x_anchor: "0%",
+        y_anchor: "0%",
+        text: line.value,
+        font_family: "Montserrat",
+        font_weight: "700",
+        font_size: specFontSize(format, false),
+        line_height: "110%",
+        fill_color: palette.text,
+        animations: dynamic ? [textSlideUp(0.05)] : [quickFade(0.05)],
+      },
+    );
+  });
+
+  return elements;
 }
 
 function rectPath(): string {
@@ -358,8 +592,166 @@ function buildGalleryPhoto(
   };
 }
 
+export type SceneScheduleEntry = {
+  name: string;
+  startTime: number;
+  duration: number;
+  photoIndices: number[];
+};
+
+export type VoiceoverCue = {
+  time: number;
+  text: string;
+  photoIndex: number;
+};
+
+export type SceneTimingOptions = {
+  photoVoiceovers?: string[];
+  photoVoiceoverDurations?: number[];
+};
+
+function middleSceneBaseDuration(scene: MiddleScene): number {
+  return scene.kind === "showcase" ? BASE_DURATION.showcase : BASE_DURATION.split;
+}
+
+/** Video sahne zaman çizelgesi — ses süresine göre sahne uzunluğu ayarlanır */
+export function buildSceneSchedule(
+  photos: string[],
+  format: VideoFormat = "reels",
+  timing?: SceneTimingOptions,
+  specSceneCount = 1,
+): SceneScheduleEntry[] {
+  const galleryStartIndex = 1 + specSceneCount;
+  const middleScenes = planMiddleScenes(photos, format, galleryStartIndex);
+  const voiceovers = timing?.photoVoiceovers;
+  const durations = timing?.photoVoiceoverDurations;
+  const hasVoiceover = Boolean(voiceovers?.some((line) => line.trim()));
+
+  type Draft = Omit<SceneScheduleEntry, "startTime">;
+  const drafts: Draft[] = [];
+
+  drafts.push({ name: "intro", duration: BASE_DURATION.intro, photoIndices: [] });
+
+  if (photos[0]) {
+    const voNeed = voiceBlockDuration([0], voiceovers, durations);
+    drafts.push({
+      name: "hero",
+      duration: hasVoiceover ? Math.max(BASE_DURATION.hero, voNeed) : BASE_DURATION.hero,
+      photoIndices: [0],
+    });
+  }
+
+  if (specSceneCount > 0 && photos.length > 1) {
+    for (let c = 0; c < specSceneCount; c++) {
+      const photoIdx = Math.min(1 + c, photos.length - 1);
+      const voNeed = voiceBlockDuration([photoIdx], voiceovers, durations);
+      drafts.push({
+        name: `spec-chunk-${c}`,
+        duration: hasVoiceover ? Math.max(BASE_DURATION.specs, voNeed) : BASE_DURATION.specs,
+        photoIndices: [photoIdx],
+      });
+    }
+  }
+
+  let photoIndex = galleryStartIndex;
+  const middleDrafts: Draft[] = [];
+
+  middleScenes.forEach((scene, index) => {
+    const photoIndices: number[] = [];
+    if (scene.kind === "showcase") {
+      photoIndices.push(photoIndex);
+      photoIndex += 1;
+    } else if (scene.kind === "split-duo") {
+      photoIndices.push(photoIndex, photoIndex + 1);
+      photoIndex += 2;
+    } else {
+      photoIndices.push(photoIndex, photoIndex + 1, photoIndex + 2);
+      photoIndex += 3;
+    }
+
+    const voNeed = voiceBlockDuration(photoIndices, voiceovers, durations);
+    const base = middleSceneBaseDuration(scene);
+    middleDrafts.push({
+      name: `middle-${index}`,
+      duration: hasVoiceover ? Math.max(base, voNeed) : base,
+      photoIndices,
+    });
+  });
+
+  if (!hasVoiceover && middleDrafts.length > 0) {
+    const uniform = calcMiddleSceneDuration(middleDrafts.length, specSceneCount);
+    for (const draft of middleDrafts) {
+      draft.duration = uniform;
+    }
+  }
+
+  drafts.push(...middleDrafts);
+  drafts.push({ name: "outro", duration: BASE_DURATION.outro, photoIndices: [] });
+
+  if (hasVoiceover) {
+    const fixedTotal = drafts
+      .filter((d) => !d.name.startsWith("middle-"))
+      .reduce((sum, d) => sum + d.duration, 0);
+    const middleIdxs = drafts
+      .map((d, i) => (d.name.startsWith("middle-") ? i : -1))
+      .filter((i) => i >= 0);
+    const middleDurs = middleIdxs.map((i) => drafts[i]!.duration);
+    const scaled = scaleMiddleDurations(middleDurs, MAX_VIDEO_SECONDS, fixedTotal);
+    middleIdxs.forEach((draftIdx, i) => {
+      drafts[draftIdx]!.duration = scaled[i]!;
+    });
+  }
+
+  let time = 0;
+  return drafts.map((draft) => {
+    const entry: SceneScheduleEntry = {
+      ...draft,
+      startTime: time,
+    };
+    time += draft.duration;
+    return entry;
+  });
+}
+
+/** Her fotoğrafın seslendirmesi sırayla çalar — üst üste binmez */
+export function buildVoiceoverCues(
+  schedule: SceneScheduleEntry[],
+  photoVoiceovers: string[],
+  durations?: number[],
+): VoiceoverCue[] {
+  const cues: VoiceoverCue[] = [];
+
+  for (const scene of schedule) {
+    if (!scene.photoIndices.length) continue;
+
+    let offset = 0;
+    for (const photoIdx of scene.photoIndices) {
+      const text = photoVoiceovers[photoIdx]?.trim();
+      if (!text) continue;
+
+      cues.push({
+        time: scene.startTime + offset,
+        text,
+        photoIndex: photoIdx,
+      });
+
+      const d =
+        durations?.[photoIdx] && durations[photoIdx]! > 0
+          ? durations[photoIdx]!
+          : estimateTextDuration(text);
+      offset += d + VO_GAP_SEC;
+    }
+  }
+
+  return cues;
+}
+
 function hasVoiceover(data: CarVideoFormData): boolean {
-  return Boolean(data.voiceoverText?.trim() || data.voiceoverAudioSource?.trim());
+  return Boolean(
+    data.voiceoverText?.trim() ||
+    data.voiceoverAudioSource?.trim() ||
+    data.photoVoiceovers?.some((line) => line.trim()),
+  );
 }
 
 function buildMusicElement(data: CarVideoFormData): RenderElement {
@@ -377,41 +769,75 @@ function buildMusicElement(data: CarVideoFormData): RenderElement {
   };
 }
 
-function buildVoiceoverElement(data: CarVideoFormData): RenderElement | null {
+function resolveVoiceoverLanguage(data: CarVideoFormData): TtsLanguage {
+  try {
+    return parseTtsLanguage(data.voiceoverLanguage);
+  } catch {
+    return "tr";
+  }
+}
+
+function buildVoiceoverElements(
+  data: CarVideoFormData,
+  schedule: SceneScheduleEntry[],
+): RenderElement[] {
+  const lang = resolveVoiceoverLanguage(data);
+  const provider = buildCreatomateElevenLabsProvider(lang);
+
+  if (data.photoVoiceovers?.some((line) => line.trim())) {
+    const cues = buildVoiceoverCues(
+      schedule,
+      data.photoVoiceovers ?? [],
+      data.photoVoiceoverDurations,
+    );
+    return cues.map((cue, index) => {
+      const hosted = data.photoVoiceoverSources?.[cue.photoIndex]?.trim();
+      return {
+        name: `Voiceover-${index + 1}`,
+        type: "audio",
+        track: 10,
+        time: cue.time,
+        duration: "media",
+        source: hosted || cue.text,
+        ...(hosted ? {} : { provider }),
+        volume: "100%",
+        audio_fade_in: 0.12,
+      };
+    });
+  }
+
   const text = data.voiceoverText?.trim();
   if (text) {
-    let lang: TtsLanguage = "tr";
-    try {
-      lang = parseTtsLanguage(data.voiceoverLanguage);
-    } catch {
-      lang = "tr";
-    }
-    return {
+    return [
+      {
+        name: "Voiceover",
+        type: "audio",
+        track: 10,
+        time: 0,
+        duration: "media",
+        source: text,
+        provider,
+        volume: "100%",
+        audio_fade_in: 0.2,
+      },
+    ];
+  }
+
+  const url = data.voiceoverAudioSource?.trim();
+  if (!url) return [];
+
+  return [
+    {
       name: "Voiceover",
       type: "audio",
       track: 10,
       time: 0,
       duration: "media",
-      source: text,
-      provider: buildCreatomateElevenLabsProvider(lang),
+      source: url,
       volume: "100%",
       audio_fade_in: 0.2,
-    };
-  }
-
-  const url = data.voiceoverAudioSource?.trim();
-  if (!url) return null;
-
-  return {
-    name: "Voiceover",
-    type: "audio",
-    track: 10,
-    time: 0,
-    duration: "media",
-    source: url,
-    volume: "100%",
-    audio_fade_in: 0.2,
-  };
+    },
+  ];
 }
 
 // ─── Intro ───────────────────────────────────────────────────────────────────
@@ -419,15 +845,112 @@ function buildVoiceoverElement(data: CarVideoFormData): RenderElement | null {
 function buildIntroScene(
   data: CarVideoFormData,
   duration: number,
+  format: VideoFormat,
   style: TemplateStyle,
 ): RenderElement {
   const dynamic = style === "dynamic";
+  const palette = colorsFor(style);
+  const typo = introTypography(format);
+  const carTitle = truncateTitle(data.carTitle, format);
+  const introSubtitle = truncateSubtitle(data.introSubtitle, format);
+  const priceTag = truncateLabel(data.priceTag, format === "youtube" ? 24 : 20);
+  const showDealer = !isPlaceholderDealerName(data.dealerName);
+
+  const textElements: RenderElement[] = [];
+
+  if (showDealer) {
+    textElements.push({
+      name: "Dealer-Name",
+      type: "text",
+      track: 3,
+      time: 0,
+      duration,
+      y: typo.dealerY,
+      width: typo.textWidth,
+      x_alignment: "50%",
+      y_alignment: "100%",
+      text: truncateLabel(data.dealerName, 28),
+      font_family: "Montserrat",
+      font_weight: "800",
+      font_size: typo.dealerSize,
+      letter_spacing: "6%",
+      fill_color: palette.text,
+      animations: dynamic
+        ? [textSlideUp(0.05, "letter")]
+        : [
+            {
+              time: 0.1,
+              duration: 0.7,
+              easing: "quadratic-out",
+              type: "text-slide",
+              scope: "split-clip",
+              split: "letter",
+              overlap: "93%",
+              direction: "up",
+            },
+          ],
+    });
+  }
+
+  textElements.push(
+    {
+      name: "Intro-Car-Title",
+      type: "text",
+      track: 5,
+      time: 0,
+      duration,
+      y: typo.titleY,
+      width: typo.textWidth,
+      x_alignment: "50%",
+      y_alignment: "50%",
+      text: carTitle,
+      font_family: "Montserrat",
+      font_weight: "800",
+      font_size: typo.titleSize,
+      fill_color: palette.text,
+      animations: dynamic ? [textSlideUp(0.25)] : [quickFade(0.2)],
+    },
+    {
+      name: "Intro-Subtitle",
+      type: "text",
+      track: 4,
+      time: 0,
+      duration,
+      y: typo.subtitleY,
+      width: typo.textWidth,
+      x_alignment: "50%",
+      text: introSubtitle,
+      font_family: "Roboto Condensed",
+      font_weight: "500",
+      font_size: typo.subtitleSize,
+      letter_spacing: "14%",
+      fill_color: palette.accent,
+      animations: dynamic ? [slideIn("0°", 0.35)] : [quickFade(0.35)],
+    },
+    {
+      name: "Intro-Price",
+      type: "text",
+      track: 6,
+      time: 0,
+      duration,
+      y: typo.priceY,
+      width: typo.textWidth,
+      x_alignment: "50%",
+      text: priceTag,
+      font_family: "Montserrat",
+      font_weight: "800",
+      font_size: typo.priceSize,
+      fill_color: palette.accent,
+      animations: dynamic ? [popIn(0.45), quickFade(0.45)] : [quickFade(0.45)],
+    },
+  );
+
   return {
     name: "Intro",
     type: "composition",
     track: 2,
     duration,
-    fill_color: COLORS.bg,
+    fill_color: palette.bg,
     animations: [SCENE_FADE],
     elements: [
       ...(dynamic ? [flashAccent()] : []),
@@ -440,8 +963,8 @@ function buildIntroScene(
         height: "100%",
         path: rectPath(),
         fill_color: [
-          { offset: "0%", color: COLORS.panel },
-          { offset: "100%", color: COLORS.panelLight },
+          { offset: "0%", color: palette.panel },
+          { offset: "100%", color: palette.panelLight },
         ],
       },
       {
@@ -450,13 +973,13 @@ function buildIntroScene(
         track: 2,
         time: 0,
         duration,
-        y: "62%",
+        y: typo.accentY,
         width: "18%",
         height: "0.6 vmin",
         x_anchor: "50%",
         y_anchor: "50%",
         path: rectPath(),
-        fill_color: COLORS.accent,
+        fill_color: palette.accent,
         animations: [
           {
             time: 0.4,
@@ -470,87 +993,7 @@ function buildIntroScene(
           },
         ],
       },
-      {
-        name: "Dealer-Name",
-        type: "text",
-        track: 3,
-        time: 0,
-        duration,
-        y: "44%",
-        width: "90%",
-        x_alignment: "50%",
-        y_alignment: "100%",
-        text: data.dealerName,
-        font_family: "Montserrat",
-        font_weight: "800",
-        font_size: "8 vmin",
-        letter_spacing: "6%",
-        fill_color: COLORS.text,
-        animations: dynamic
-          ? [textSlideUp(0.05, "letter")]
-          : [
-              {
-                time: 0.1,
-                duration: 0.7,
-                easing: "quadratic-out",
-                type: "text-slide",
-                scope: "split-clip",
-                split: "letter",
-                overlap: "93%",
-                direction: "up",
-              },
-            ],
-      },
-      {
-        name: "Intro-Car-Title",
-        type: "text",
-        track: 5,
-        time: 0,
-        duration,
-        y: "50%",
-        width: "90%",
-        x_alignment: "50%",
-        y_alignment: "50%",
-        text: data.carTitle,
-        font_family: "Montserrat",
-        font_weight: "800",
-        font_size: "5.5 vmin",
-        fill_color: COLORS.text,
-        animations: dynamic ? [textSlideUp(0.25)] : [quickFade(0.2)],
-      },
-      {
-        name: "Intro-Subtitle",
-        type: "text",
-        track: 4,
-        time: 0,
-        duration,
-        y: "62%",
-        width: "90%",
-        x_alignment: "50%",
-        text: data.introSubtitle,
-        font_family: "Roboto Condensed",
-        font_weight: "500",
-        font_size: "2.8 vmin",
-        letter_spacing: "14%",
-        fill_color: COLORS.accent,
-        animations: dynamic ? [slideIn("0°", 0.35)] : [quickFade(0.35)],
-      },
-      {
-        name: "Intro-Price",
-        type: "text",
-        track: 6,
-        time: 0,
-        duration,
-        y: "74%",
-        width: "90%",
-        x_alignment: "50%",
-        text: data.priceTag,
-        font_family: "Montserrat",
-        font_weight: "800",
-        font_size: "4.5 vmin",
-        fill_color: COLORS.accent,
-        animations: dynamic ? [popIn(0.45), quickFade(0.45)] : [quickFade(0.45)],
-      },
+      ...textElements,
     ],
   };
 }
@@ -561,11 +1004,18 @@ function buildHeroScene(
   photoUrl: string,
   data: CarVideoFormData,
   duration: number,
+  format: VideoFormat,
   style: TemplateStyle,
   transitionIndex: number,
   name = "Hero",
 ): RenderElement {
   const dynamic = style === "dynamic";
+  const palette = colorsFor(style);
+  const typo = heroTypography(format);
+  const carTitle = truncateTitle(data.carTitle, format);
+  const carSubtitle = truncateSubtitle(data.carSubtitle, format);
+  const priceTag = truncateLabel(data.priceTag, format === "youtube" ? 22 : 18);
+
   return {
     name,
     type: "composition",
@@ -587,7 +1037,7 @@ function buildHeroScene(
         duration,
         y: "100%",
         width: "100%",
-        height: "60%",
+        height: format === "youtube" ? "55%" : "60%",
         y_anchor: "100%",
         path: rectPath(),
         fill_color: [
@@ -605,15 +1055,15 @@ function buildHeroScene(
         y: "8%",
         x_anchor: "0%",
         y_anchor: "0%",
-        text: data.priceTag,
+        text: priceTag,
         font_family: "Montserrat",
         font_weight: "800",
-        font_size: "5 vmin",
-        background_color: COLORS.accent,
+        font_size: typo.priceSize,
+        background_color: palette.accent,
         background_x_padding: "55%",
         background_y_padding: "40%",
         background_border_radius: "16%",
-        fill_color: COLORS.text,
+        fill_color: palette.text,
         animations: dynamic ? [popIn(0), quickFade(0)] : [quickFade(0)],
       },
       {
@@ -623,13 +1073,13 @@ function buildHeroScene(
         time: 0,
         duration,
         x: "4%",
-        y: "72%",
+        y: typo.titleY,
         width: "0.55 vmin",
         height: "12%",
         x_anchor: "0%",
         y_anchor: "0%",
         path: rectPath(),
-        fill_color: COLORS.accent,
+        fill_color: palette.accent,
         ...(dynamic
           ? {
               animations: [
@@ -654,17 +1104,15 @@ function buildHeroScene(
         time: 0,
         duration,
         x: "7%",
-        y: "72%",
-        width: "80%",
+        y: typo.titleY,
+        width: typo.textWidth,
         x_anchor: "0%",
         y_anchor: "0%",
-        text: data.carTitle,
+        text: carTitle,
         font_family: "Montserrat",
         font_weight: "800",
-        font_size: "6 vmin",
-        fill_color: COLORS.text,
-        stroke_color: "rgba(0,0,0,0.6)",
-        stroke_width: "0.12 vmin",
+        font_size: typo.titleSize,
+        fill_color: palette.text,
         animations: dynamic ? [textSlideUp(0.1)] : [quickFade(0.05)],
       },
       {
@@ -674,18 +1122,16 @@ function buildHeroScene(
         time: 0,
         duration,
         x: "7%",
-        y: "84%",
-        width: "85%",
+        y: typo.subtitleY,
+        width: typo.textWidth,
         x_anchor: "0%",
         y_anchor: "0%",
-        text: data.carSubtitle,
+        text: carSubtitle,
         font_family: "Roboto Condensed",
         font_weight: "500",
-        font_size: "2.8 vmin",
+        font_size: typo.subtitleSize,
         letter_spacing: "3%",
-        fill_color: COLORS.textSoft,
-        stroke_color: "rgba(0,0,0,0.5)",
-        stroke_width: "0.1 vmin",
+        fill_color: palette.textSoft,
         animations: dynamic
           ? [slideIn("0°", 0.2), quickFade(0.2)]
           : [quickFade(0.1)],
@@ -780,60 +1226,65 @@ function buildSpecRow(
   ];
 }
 
-function buildSpecsScene(
+function buildSpecChunkScene(
   photoUrl: string,
-  data: CarVideoFormData,
+  chunk: SpecChunk,
   duration: number,
   format: VideoFormat,
   style: TemplateStyle,
   transitionIndex: number,
 ): RenderElement {
-  const isReels = format === "reels";
-
-  const photoLayout = isReels
-    ? { x: "50%", y: "72%", width: "100%" }
-    : { x: "62%", width: "76%" };
-
-  const panelLayout = isReels
-    ? { x: "0%", y: "0%", width: "100%", height: "48%", x_anchor: "0%", y_anchor: "0%" }
-    : { x: "0%", width: "42%", height: "100%", x_anchor: "0%" };
-
+  const palette = colorsFor(style);
+  const portrait = isPortraitStack(format);
   const dynamic = style === "dynamic";
-  const specStarts = dynamic ? [0.2, 0.45, 0.7, 0.95] : [0, 0, 0, 0];
+  const lines = chunk.lines;
+  const gridPlan = planSpecGridLayout(lines.length, format, "specs");
+  const columns = lines.length >= 4 ? gridPlan.columns : 1;
 
-  const specRows = [
-    ...buildSpecRow("⏱", "KİLOMETRE", data.specKm, 22, duration, specStarts[0], 4, style),
-    ...buildSpecRow("⛽", "YAKIT", data.specFuel, 36, duration, specStarts[1], 7, style),
-    ...buildSpecRow("⚙", "VİTES", data.specGear, 50, duration, specStarts[2], 10, style),
-    ...buildSpecRow("📅", "MODEL YILI", data.specYear, 64, duration, specStarts[3], 13, style),
-  ];
+  const photoLayout = portrait
+    ? { x: "50%", y: format === "square" ? "70%" : "72%", width: "100%" }
+    : { x: "62%", width: "72%" };
 
-  if (isReels) {
-    for (const el of specRows) {
-      if (el.y === "22%") el.y = "8%";
-      if (el.y === "26%") el.y = "12%";
-      if (el.y === "36%") el.y = "18%";
-      if (el.y === "40%") el.y = "22%";
-      if (el.y === "50%") el.y = "28%";
-      if (el.y === "54%") el.y = "32%";
-      if (el.y === "64%") el.y = "38%";
-      if (el.y === "68%") el.y = "42%";
-    }
-  }
+  const panelLayout = portrait
+    ? {
+        x: "0%",
+        y: "0%",
+        width: "100%",
+        height: format === "square" ? "46%" : "48%",
+        x_anchor: "0%",
+        y_anchor: "0%",
+      }
+    : { x: "0%", y: "0%", width: "40%", height: "100%", x_anchor: "0%", y_anchor: "0%" };
+
+  const specGrid = buildSpecGridElements(lines, duration, format, style, 4, palette, {
+    x: gridPlan.x,
+    yStart: gridPlan.yStart,
+    width: portrait ? "90%" : "32%",
+    columns,
+    col2X: gridPlan.col2X,
+    colWidth: gridPlan.colWidth,
+  });
 
   return {
-    name: "Specs",
+    name: `Spec-Chunk-${chunk.id}`,
     type: "composition",
     track: 2,
     duration,
-    fill_color: COLORS.bg,
+    fill_color: palette.bg,
     animations: [sceneEnter(style, transitionIndex)],
     elements: [
       ...(dynamic ? [flashAccent()] : []),
-      buildCarPhoto("Photo-2", photoUrl, duration, 1, {
-        ...photoLayout,
-        height: isReels ? "56%" : "100%",
-      }, dynamic ? [slideIn(isReels ? "180°" : "270°", 0)] : []),
+      buildCarPhoto(
+        `Photo-${chunk.id}`,
+        photoUrl,
+        duration,
+        1,
+        {
+          ...photoLayout,
+          height: portrait ? (format === "square" ? "58%" : "56%") : "100%",
+        },
+        dynamic ? [slideIn(portrait ? "180°" : "270°", 0)] : [],
+      ),
       {
         name: "Specs-Panel",
         type: "shape",
@@ -843,17 +1294,15 @@ function buildSpecsScene(
         ...panelLayout,
         path: rectPath(),
         fill_color: [
-          { offset: "0%", color: COLORS.panel },
-          { offset: "100%", color: COLORS.bg },
+          { offset: "0%", color: palette.panel },
+          { offset: "100%", color: palette.bg },
         ],
         animations: [
           {
             time: 0,
-            duration: 0.5,
+            duration: 0.45,
             easing: "quadratic-out",
-            type: "slide",
-            distance: "8%",
-            direction: isReels ? "180°" : "90°",
+            type: "fade",
           },
         ],
       },
@@ -863,140 +1312,86 @@ function buildSpecsScene(
         track: 3,
         time: 0.4,
         duration: duration - 0.4,
-        x: "4%",
-        y: isReels ? "4%" : "14%",
-        width: isReels ? "90%" : "34%",
+        x: portrait ? "5%" : "4%",
+        y: portrait ? "4%" : "12%",
+        width: portrait ? "90%" : "32%",
         x_anchor: "0%",
         y_anchor: "0%",
-        text: "TEKNİK ÖZELLİKLER",
+        text: chunk.heading,
         font_family: "Montserrat",
         font_weight: "800",
-        font_size: "3 vmin",
+        font_size: portrait ? "2.8 vmin" : "2.5 vmin",
         letter_spacing: "5%",
-        fill_color: COLORS.accent,
-        animations: [
-          {
-            time: 0,
-            duration: 0.5,
-            easing: "quadratic-out",
-            type: "fade",
-          },
-        ],
+        fill_color: palette.accent,
+        animations: [{ time: 0, duration: 0.5, easing: "quadratic-out", type: "fade" }],
       },
-      ...specRows,
+      ...specGrid,
     ],
   };
 }
 
 // ─── Multi-image sahneler ────────────────────────────────────────────────────
-// YouTube: Specs ile aynı grid — sol panel %42, sağ galeri %58
 
-const PANEL_W_YT = 42;
-
-const SPLIT_LAYOUT = {
-  youtube: {
-    panel: { x: "0%", width: `${PANEL_W_YT}%`, height: "100%", x_anchor: "0%" as const },
-    panelText: { x: "4%", width: "34%" },
-    photoZone: { x: `${PANEL_W_YT}%`, width: `${100 - PANEL_W_YT}%`, height: "100%", x_anchor: "0%" as const },
-    dividerX: `${PANEL_W_YT}%`,
-    duo: {
-      photos: [
-        { x: "56%", y: "54%", width: "26%", height: "42%" },
-        { x: "86%", y: "54%", width: "26%", height: "42%" },
-      ],
-    },
-    trio: {
-      hero: { x: "58%", y: "54%", width: "28%", height: "46%" },
-      stack: [
-        { x: "87%", y: "34%", width: "22%", height: "21%" },
-        { x: "87%", y: "70%", width: "22%", height: "21%" },
-      ],
-    },
-  },
-  reels: {
-    panel: { x: "0%", y: "100%", width: "100%", height: "46%", x_anchor: "0%" as const, y_anchor: "100%" as const },
-    panelText: { x: "5%", width: "90%" },
-    photoZone: { x: "0%", y: "0%", width: "100%", height: "54%", x_anchor: "0%" as const, y_anchor: "0%" as const },
-    photoZoneEnd: "54%",
-    duo: {
-      photos: [
-        { x: "27%", y: "24%", width: "44%", height: "32%" },
-        { x: "73%", y: "24%", width: "44%", height: "32%" },
-      ],
-    },
-    trio: {
-      photos: [
-        { x: "17%", y: "24%", width: "28%", height: "30%" },
-        { x: "50%", y: "24%", width: "28%", height: "30%" },
-        { x: "83%", y: "24%", width: "28%", height: "30%" },
-      ],
-    },
-  },
-} as const;
-
-function buildPanelSpecRows(
-  data: CarVideoFormData,
+function buildPanelSpecChunk(
+  chunk: SpecChunk,
   duration: number,
   format: VideoFormat,
   trackStart: number,
   style: TemplateStyle,
+  palette: Palette,
 ): RenderElement[] {
-  const isReels = format === "reels";
+  const lines = chunk.lines;
+  const gridPlan = planSpecGridLayout(lines.length, format, "split");
+  const columns = lines.length >= 4 ? gridPlan.columns : 1;
 
-  if (isReels) {
-    const items = [
-      { label: "KİLOMETRE", value: data.specKm, y: 64 },
-      { label: "YAKIT", value: data.specFuel, y: 72 },
-      { label: "VİTES", value: data.specGear, y: 80 },
-      { label: "MODEL", value: data.specYear, y: 88 },
-    ];
-    const dynamic = style === "dynamic";
-    return items.flatMap((item, i) => [
-      {
-        name: `Panel-Spec-${item.label}`,
-        type: "text",
-        track: trackStart + i * 2,
-        time: 0.2 + i * 0.08,
-        duration: duration - 0.2 - i * 0.08,
-        x: "5%",
-        y: `${item.y}%`,
-        width: "28%",
-        x_anchor: "0%",
-        y_anchor: "0%",
-        text: item.label,
-        font_family: "Roboto Condensed",
-        font_size: "1.7 vmin",
-        letter_spacing: "5%",
-        fill_color: COLORS.textDim,
-        animations: dynamic ? [slideIn("90°", 0)] : [quickFade(0)],
-      },
-      {
-        name: `Panel-Spec-${item.label}-Val`,
-        type: "text",
-        track: trackStart + i * 2 + 1,
-        time: 0.28 + i * 0.08,
-        duration: duration - 0.28 - i * 0.08,
-        x: "36%",
-        y: `${item.y}%`,
-        width: "58%",
-        x_anchor: "0%",
-        y_anchor: "0%",
-        text: item.value,
-        font_family: "Montserrat",
-        font_weight: "700",
-        font_size: "2.4 vmin",
-        fill_color: COLORS.text,
-        animations: dynamic ? [textSlideUp(0.05)] : [quickFade(0.05)],
-      },
-    ]);
+  return buildSpecGridElements(lines, duration, format, style, trackStart, palette, {
+    x: gridPlan.x,
+    yStart: gridPlan.yStart,
+    width: isPortraitStack(format) ? "90%" : "32%",
+    columns,
+    col2X: gridPlan.col2X,
+    colWidth: gridPlan.colWidth,
+  });
+}
+
+type SplitBlock = { id: string; show: boolean; height: number };
+
+function splitStackPositions(
+  contentTop: number,
+  portrait: boolean,
+  blocks: SplitBlock[],
+  format: VideoFormat,
+): Record<string, number> {
+  const gap = portrait ? 5 : 4;
+  const visible = blocks.filter((b) => b.show);
+  let stackHeight = 0;
+
+  visible.forEach((block, index) => {
+    if (block.id === "price" && index > 0) {
+      stackHeight += portrait ? 4 : 3;
+    }
+    stackHeight += block.height;
+    if (index < visible.length - 1) {
+      stackHeight += gap;
+    }
+  });
+
+  const panelStart = contentTop + 10;
+  const panelEnd = portrait ? (format === "square" ? 92 : 94) : 86;
+  const avail = panelEnd - panelStart;
+  let y = panelStart + Math.max(0, (avail - stackHeight) / 2);
+  const positions: Record<string, number> = {};
+
+  for (const block of blocks) {
+    if (!block.show) continue;
+    if (block.id === "price") {
+      y += portrait ? 4 : 3;
+    }
+    positions[block.id] = y;
+    y += block.height + gap;
   }
 
-  return [
-    ...buildSpecRow("⏱", "KİLOMETRE", data.specKm, 30, duration, 0.2, trackStart, style),
-    ...buildSpecRow("⛽", "YAKIT", data.specFuel, 44, duration, 0.35, trackStart + 3, style),
-    ...buildSpecRow("⚙", "VİTES", data.specGear, 58, duration, 0.5, trackStart + 6, style),
-    ...buildSpecRow("📅", "MODEL", data.specYear, 72, duration, 0.65, trackStart + 9, style),
-  ];
+  return positions;
 }
 
 function buildSplitInfoContent(
@@ -1007,18 +1402,23 @@ function buildSplitInfoContent(
   infoVariant: number,
   trackStart: number,
 ): RenderElement[] {
-  const isReels = format === "reels";
+  const portrait = isPortraitStack(format);
   const dynamic = style === "dynamic";
-  const { panelText } = SPLIT_LAYOUT[isReels ? "reels" : "youtube"];
+  const palette = colorsFor(style);
+  const t = videoTemplateStrings(data.videoLanguage);
+  const { panelText } = splitLayoutFor(format);
   const { x: textX, width: textW } = panelText;
 
-  const contentTop = isReels ? 58 : 12;
+  const contentTop = portrait ? (format === "square" ? 56 : 58) : 12;
+  const chunks = collectSpecChunks(data);
+  const mod = normalizeInfoVariant(infoVariant, chunks.length);
+  const summaryMod = chunks.length + 1;
   const heading =
-    infoVariant === 0
-      ? "ARAÇ BİLGİLERİ"
-      : infoVariant === 1
-        ? "TEKNİK DETAYLAR"
-        : "ÖZET";
+    mod === 0
+      ? t.carInfoHeading
+      : mod === summaryMod
+        ? t.summaryHeading
+        : chunks[mod - 1]?.heading ?? t.specsHeading;
 
   const accentBar: RenderElement = {
     name: "Split-Accent-Bar",
@@ -1033,7 +1433,7 @@ function buildSplitInfoContent(
     x_anchor: "0%",
     y_anchor: "0%",
     path: rectPath(),
-    fill_color: COLORS.accent,
+    fill_color: palette.accent,
     animations: [
       {
         time: 0.1,
@@ -1062,167 +1462,209 @@ function buildSplitInfoContent(
     text: heading,
     font_family: "Montserrat",
     font_weight: "800",
-    font_size: isReels ? "2.8 vmin" : "2.4 vmin",
+    font_size: portrait ? "2.8 vmin" : "2.4 vmin",
     letter_spacing: "6%",
-    fill_color: COLORS.accent,
+    fill_color: palette.accent,
     animations: dynamic ? [textSlideUp(0)] : [quickFade(0)],
   };
 
-  if (infoVariant === 0) {
-    return [
-      accentBar,
-      headingEl,
-      {
-        name: "Split-Car-Title",
-        type: "text",
-        track: trackStart + 2,
-        time: 0.25,
-        duration: duration - 0.25,
-        x: textX,
-        y: `${contentTop + 10}%`,
-        width: textW,
-        x_anchor: "0%",
-        y_anchor: "0%",
-        text: data.carTitle,
-        font_family: "Montserrat",
-        font_weight: "800",
-        font_size: isReels ? "4 vmin" : "3.2 vmin",
-        fill_color: COLORS.text,
-        animations: dynamic ? [textSlideUp(0.08)] : [quickFade(0.08)],
-      },
-      {
+  if (mod === 0) {
+    const hasSubtitle = Boolean(data.carSubtitle?.trim());
+    const hasPrice = Boolean(data.priceTag?.trim());
+    const yPos = splitStackPositions(contentTop, portrait, [
+      { id: "title", show: true, height: portrait ? 7.5 : 6.5 },
+      { id: "subtitle", show: hasSubtitle, height: portrait ? 5 : 4 },
+      { id: "price", show: hasPrice, height: portrait ? 6.5 : 5.5 },
+    ], format);
+
+    const elements: RenderElement[] = [accentBar, headingEl];
+
+    elements.push({
+      name: "Split-Car-Title",
+      type: "text",
+      track: trackStart + 2,
+      time: 0.25,
+      duration: duration - 0.25,
+      x: textX,
+      y: `${yPos.title}%`,
+      width: textW,
+      x_anchor: "0%",
+      y_anchor: "0%",
+      text: truncateTitle(data.carTitle, format),
+      font_family: "Montserrat",
+      font_weight: "800",
+      font_size: portrait ? "4 vmin" : "3.2 vmin",
+      fill_color: palette.text,
+      animations: dynamic ? [textSlideUp(0.08)] : [quickFade(0.08)],
+    });
+
+    if (hasSubtitle) {
+      elements.push({
         name: "Split-Car-Subtitle",
         type: "text",
         track: trackStart + 3,
         time: 0.35,
         duration: duration - 0.35,
         x: textX,
-        y: `${contentTop + (isReels ? 18 : 22)}%`,
+        y: `${yPos.subtitle}%`,
         width: textW,
         x_anchor: "0%",
         y_anchor: "0%",
-        text: data.carSubtitle,
+        text: truncateSubtitle(data.carSubtitle, format),
         font_family: "Roboto Condensed",
         font_weight: "500",
-        font_size: isReels ? "2.4 vmin" : "2 vmin",
+        font_size: portrait ? "2.4 vmin" : "2 vmin",
         letter_spacing: "2%",
-        fill_color: COLORS.textSoft,
+        fill_color: palette.textSoft,
         animations: dynamic ? [slideIn("0°", 0.1)] : [quickFade(0.1)],
-      },
-      {
+      });
+    }
+
+    if (hasPrice) {
+      elements.push({
         name: "Split-Price",
         type: "text",
         track: trackStart + 4,
         time: 0.45,
         duration: duration - 0.45,
         x: textX,
-        y: `${contentTop + (isReels ? 27 : 34)}%`,
+        y: `${yPos.price}%`,
         x_anchor: "0%",
         y_anchor: "0%",
-        text: data.priceTag,
+        text: truncateLabel(data.priceTag, format === "youtube" ? 20 : 16),
         font_family: "Montserrat",
         font_weight: "800",
-        font_size: isReels ? "4.5 vmin" : "3.8 vmin",
-        fill_color: COLORS.accent,
+        font_size: portrait ? "4.5 vmin" : "3.8 vmin",
+        fill_color: palette.accent,
         animations: dynamic ? [popIn(0.12)] : [quickFade(0.12)],
-      },
-    ];
+      });
+    }
+
+    return elements;
   }
 
-  if (infoVariant === 1) {
+  if (mod === summaryMod) {
+    const hasDealer = !isPlaceholderDealerName(data.dealerName);
+    const hasTitle = Boolean(data.carTitle?.trim());
+    const hasPrice = Boolean(data.priceTag?.trim());
+    const hasPhone = Boolean(data.phone?.trim());
+    const yPos = splitStackPositions(contentTop, portrait, [
+      { id: "dealer", show: hasDealer, height: portrait ? 6 : 5 },
+      { id: "title", show: hasTitle, height: portrait ? 5.5 : 4.5 },
+      { id: "price", show: hasPrice, height: portrait ? 6.5 : 5.5 },
+      { id: "phone", show: hasPhone, height: portrait ? 5 : 4 },
+    ], format);
+
+    const summaryElements: RenderElement[] = [accentBar, headingEl];
+
+    if (hasDealer) {
+      summaryElements.push({
+        name: "Split-Dealer",
+        type: "text",
+        track: trackStart + 2,
+        time: 0.25,
+        duration: duration - 0.25,
+        x: textX,
+        y: `${yPos.dealer}%`,
+        width: textW,
+        x_anchor: "0%",
+        y_anchor: "0%",
+        text: truncateLabel(data.dealerName, 28),
+        font_family: "Montserrat",
+        font_weight: "800",
+        font_size: portrait ? "3.8 vmin" : "3.2 vmin",
+        letter_spacing: "4%",
+        fill_color: palette.text,
+        animations: dynamic ? [textSlideUp(0.05)] : [quickFade(0.05)],
+      });
+    }
+
+    if (hasTitle) {
+      summaryElements.push({
+        name: "Split-Summary-Title",
+        type: "text",
+        track: trackStart + 3,
+        time: 0.35,
+        duration: duration - 0.35,
+        x: textX,
+        y: `${yPos.title}%`,
+        width: textW,
+        x_anchor: "0%",
+        y_anchor: "0%",
+        text: truncateTitle(data.carTitle, format),
+        font_family: "Montserrat",
+        font_weight: "700",
+        font_size: portrait ? "3 vmin" : "2.6 vmin",
+        fill_color: palette.textSoft,
+        animations: dynamic ? [slideIn("0°", 0.08)] : [quickFade(0.08)],
+      });
+    }
+
+    if (hasPrice) {
+      summaryElements.push({
+        name: "Split-Summary-Price",
+        type: "text",
+        track: trackStart + 4,
+        time: 0.45,
+        duration: duration - 0.45,
+        x: textX,
+        y: `${yPos.price}%`,
+        x_anchor: "0%",
+        y_anchor: "0%",
+        text: truncateLabel(data.priceTag, format === "youtube" ? 20 : 16),
+        font_family: "Montserrat",
+        font_weight: "800",
+        font_size: portrait ? "4.8 vmin" : "4.2 vmin",
+        fill_color: palette.accent,
+        animations: dynamic ? [popIn(0.1)] : [quickFade(0.1)],
+      });
+    }
+
+    if (hasPhone) {
+      summaryElements.push({
+        name: "Split-Phone",
+        type: "text",
+        track: trackStart + 5,
+        time: 0.55,
+        duration: duration - 0.55,
+        x: textX,
+        y: `${yPos.phone}%`,
+        width: textW,
+        x_anchor: "0%",
+        y_anchor: "0%",
+        text: truncateLabel(data.phone, 20),
+        font_family: "Roboto Condensed",
+        font_weight: "700",
+        font_size: portrait ? "2.6 vmin" : "2.3 vmin",
+        letter_spacing: "4%",
+        fill_color: palette.textMuted,
+        animations: dynamic ? [textSlideUp(0.1)] : [quickFade(0.1)],
+      });
+    }
+
+    return summaryElements;
+  }
+
+  const chunk = chunks[mod - 1];
+  if (chunk) {
     return [
       accentBar,
       headingEl,
-      ...buildPanelSpecRows(data, duration, format, trackStart + 2, style),
+      ...buildPanelSpecChunk(chunk, duration, format, trackStart + 2, style, palette),
     ];
   }
 
-  return [
-    accentBar,
-    headingEl,
-    {
-      name: "Split-Dealer",
-      type: "text",
-      track: trackStart + 2,
-      time: 0.25,
-      duration: duration - 0.25,
-      x: textX,
-      y: `${contentTop + 10}%`,
-      width: textW,
-      x_anchor: "0%",
-      y_anchor: "0%",
-      text: data.dealerName,
-      font_family: "Montserrat",
-      font_weight: "800",
-      font_size: isReels ? "3.8 vmin" : "3.2 vmin",
-      letter_spacing: "4%",
-      fill_color: COLORS.text,
-      animations: dynamic ? [textSlideUp(0.05)] : [quickFade(0.05)],
-    },
-    {
-      name: "Split-Summary-Title",
-      type: "text",
-      track: trackStart + 3,
-      time: 0.35,
-      duration: duration - 0.35,
-      x: textX,
-      y: `${contentTop + (isReels ? 16 : 20)}%`,
-      width: textW,
-      x_anchor: "0%",
-      y_anchor: "0%",
-      text: data.carTitle,
-      font_family: "Montserrat",
-      font_weight: "700",
-      font_size: isReels ? "3 vmin" : "2.6 vmin",
-      fill_color: COLORS.textSoft,
-      animations: dynamic ? [slideIn("0°", 0.08)] : [quickFade(0.08)],
-    },
-    {
-      name: "Split-Summary-Price",
-      type: "text",
-      track: trackStart + 4,
-      time: 0.45,
-      duration: duration - 0.45,
-      x: textX,
-      y: `${contentTop + (isReels ? 25 : 32)}%`,
-      x_anchor: "0%",
-      y_anchor: "0%",
-      text: data.priceTag,
-      font_family: "Montserrat",
-      font_weight: "800",
-      font_size: isReels ? "4.8 vmin" : "4.2 vmin",
-      fill_color: COLORS.accent,
-      animations: dynamic ? [popIn(0.1)] : [quickFade(0.1)],
-    },
-    {
-      name: "Split-Phone",
-      type: "text",
-      track: trackStart + 5,
-      time: 0.55,
-      duration: duration - 0.55,
-      x: textX,
-      y: `${contentTop + (isReels ? 34 : 46)}%`,
-      width: textW,
-      x_anchor: "0%",
-      y_anchor: "0%",
-      text: data.phone,
-      font_family: "Roboto Condensed",
-      font_weight: "700",
-      font_size: isReels ? "2.6 vmin" : "2.3 vmin",
-      letter_spacing: "4%",
-      fill_color: COLORS.textMuted,
-      animations: dynamic ? [textSlideUp(0.1)] : [quickFade(0.1)],
-    },
-  ];
+  return [accentBar, headingEl];
 }
 
 function buildMultiImageBase(
   duration: number,
   format: VideoFormat,
   style: TemplateStyle,
-): { isReels: boolean; layout: typeof SPLIT_LAYOUT.youtube | typeof SPLIT_LAYOUT.reels; elements: RenderElement[] } {
-  const isReels = format === "reels";
-  const layout = SPLIT_LAYOUT[isReels ? "reels" : "youtube"];
+): { portrait: boolean; layout: ReturnType<typeof splitLayoutFor>; elements: RenderElement[] } {
+  const portrait = isPortraitStack(format);
+  const layout = splitLayoutFor(format);
+  const palette = colorsFor(style);
   const dynamic = style === "dynamic";
 
   const elements: RenderElement[] = [
@@ -1235,18 +1677,16 @@ function buildMultiImageBase(
       duration,
       path: rectPath(),
       fill_color: [
-        { offset: "0%", color: COLORS.panel },
-        { offset: "100%", color: COLORS.bg },
+        { offset: "0%", color: palette.panel },
+        { offset: "100%", color: palette.bg },
       ],
       ...layout.panel,
       animations: [
         {
           time: 0,
-          duration: 0.5,
+          duration: 0.45,
           easing: "quadratic-out",
-          type: "slide",
-          distance: "6%",
-          direction: isReels ? "180°" : "90°",
+          type: "fade",
         },
       ],
     },
@@ -1257,12 +1697,14 @@ function buildMultiImageBase(
       time: 0,
       duration,
       path: rectPath(),
-      fill_color: COLORS.bg,
+      fill_color: palette.bg,
       ...layout.photoZone,
     },
   ];
 
-  if (isReels) {
+  if (portrait) {
+    const photoZoneEnd =
+      "photoZoneEnd" in layout ? layout.photoZoneEnd : "56%";
     elements.push({
       name: "Photo-Zone-Gradient",
       type: "shape",
@@ -1270,24 +1712,24 @@ function buildMultiImageBase(
       time: 0,
       duration,
       x: "0%",
-      y: SPLIT_LAYOUT.reels.photoZoneEnd,
+      y: photoZoneEnd,
       width: "100%",
       height: "10%",
       y_anchor: "50%",
       path: rectPath(),
       fill_color: [
         { offset: "0%", color: "rgba(10,10,10,0)" },
-        { offset: "100%", color: COLORS.panel },
+        { offset: "100%", color: palette.panel },
       ],
     });
-  } else {
+  } else if ("dividerX" in layout) {
     elements.push({
       name: "Photo-Zone-Divider",
       type: "shape",
       track: 3,
       time: 0,
       duration,
-      x: SPLIT_LAYOUT.youtube.dividerX,
+      x: layout.dividerX,
       y: "50%",
       width: "0.3 vmin",
       height: "90%",
@@ -1312,7 +1754,7 @@ function buildMultiImageBase(
     });
   }
 
-  return { isReels, layout, elements };
+  return { portrait, layout, elements };
 }
 
 function buildGalleryHeader(
@@ -1321,10 +1763,14 @@ function buildGalleryHeader(
   format: VideoFormat,
   style: TemplateStyle,
   track: number,
+  videoLanguage?: string,
 ): RenderElement[] {
-  const isReels = format === "reels";
-  const dynamic = style === "dynamic";
-  const zoneLeft = isReels ? "5%" : `${PANEL_W_YT + 3}%`;
+  const portrait = isPortraitStack(format);
+  const layout = splitLayoutFor(format);
+  const palette = colorsFor(style);
+  const t = videoTemplateStrings(videoLanguage);
+  const labelX = portrait ? layout.panelText.x : layout.photoZone.x;
+  const labelWidth = portrait ? layout.panelText.width : "55%";
 
   return [
     {
@@ -1333,17 +1779,18 @@ function buildGalleryHeader(
       track,
       time: 0,
       duration,
-      x: zoneLeft,
-      y: isReels ? "4%" : "5%",
+      x: labelX,
+      y: portrait ? "3%" : "4%",
+      width: labelWidth,
       x_anchor: "0%",
       y_anchor: "0%",
-      text: "GALERİ",
+      text: t.galleryLabel,
       font_family: "Montserrat",
       font_weight: "800",
-      font_size: isReels ? "2.4 vmin" : "2.1 vmin",
-      letter_spacing: "12%",
-      fill_color: COLORS.accent,
-      animations: dynamic ? [slideIn("90°", 0.05)] : [quickFade(0.05)],
+      font_size: portrait ? "2.4 vmin" : "2.1 vmin",
+      letter_spacing: "8%",
+      fill_color: palette.accent,
+      animations: [quickFade(0.05)],
     },
     {
       name: "Photo-Counter",
@@ -1351,8 +1798,8 @@ function buildGalleryHeader(
       track: track + 1,
       time: 0,
       duration,
-      x: isReels ? "95%" : "97%",
-      y: isReels ? "4%" : "5%",
+      x: portrait ? "95%" : "96%",
+      y: portrait ? "3%" : "4%",
       x_anchor: "100%",
       y_anchor: "0%",
       text: counter,
@@ -1360,8 +1807,8 @@ function buildGalleryHeader(
       font_weight: "700",
       font_size: "1.9 vmin",
       letter_spacing: "5%",
-      fill_color: COLORS.textMuted,
-      animations: dynamic ? [quickFade(0.1)] : [quickFade(0)],
+      fill_color: palette.textMuted,
+      animations: [quickFade(0.1)],
     },
   ];
 }
@@ -1374,11 +1821,10 @@ function buildSplitDuoScene(
   style: TemplateStyle,
   transitionIndex: number,
 ): RenderElement {
-  const isReels = format === "reels";
+  const portrait = isPortraitStack(format);
   const { elements } = buildMultiImageBase(duration, format, style);
-  const photoLayouts = isReels
-    ? SPLIT_LAYOUT.reels.duo.photos
-    : SPLIT_LAYOUT.youtube.duo.photos;
+  const layout = splitLayoutFor(format);
+  const photoLayouts = layout.duo.photos;
   const slideDirs: ("90°" | "270°")[] = ["90°", "270°"];
 
   const photoElements = scene.urls.map((url, idx) =>
@@ -1410,6 +1856,7 @@ function buildSplitDuoScene(
         format,
         style,
         10,
+        data.videoLanguage,
       ),
       ...buildSplitInfoContent(data, duration, format, style, scene.infoVariant, 12),
     ],
@@ -1424,28 +1871,32 @@ function buildSplitTrioScene(
   style: TemplateStyle,
   transitionIndex: number,
 ): RenderElement {
-  const isReels = format === "reels";
+  const portrait = isPortraitStack(format);
   const { elements } = buildMultiImageBase(duration, format, style);
+  const layout = splitLayoutFor(format);
 
   let photoElements: RenderElement[];
 
-  if (isReels) {
+  if ("photos" in layout.trio) {
     const slideDirs: ("90°" | "270°" | "0°")[] = ["90°", "0°", "270°"];
-    const reelPhotos = SPLIT_LAYOUT.reels.trio.photos;
+    const stackPhotos = layout.trio.photos;
     photoElements = scene.urls.map((url, idx) =>
       buildGalleryPhoto(
         `Photo-${scene.photoNumbers[idx]}`,
         url,
         duration,
         5 + idx,
-        reelPhotos[idx],
+        stackPhotos[idx],
         style,
         idx * 0.08,
         slideDirs[idx],
       ),
     );
   } else {
-    const ytTrio = SPLIT_LAYOUT.youtube.trio;
+    const ytTrio = layout.trio as typeof layout.trio & {
+      hero: { x: string; y: string; width: string; height: string };
+      stack: { x: string; y: string; width: string; height: string }[];
+    };
     photoElements = [
       buildGalleryPhoto(
         `Photo-${scene.photoNumbers[0]}`,
@@ -1496,8 +1947,9 @@ function buildSplitTrioScene(
         format,
         style,
         11,
+        data.videoLanguage,
       ),
-      ...buildSplitInfoContent(data, duration, format, style, scene.infoVariant, 14),
+      ...buildSplitInfoContent(data, duration, format, style, scene.infoVariant, 13),
     ],
   };
 }
@@ -1516,7 +1968,7 @@ function buildMiddleScene(
     case "split-trio":
       return buildSplitTrioScene(scene, data, duration, format, style, transitionIndex);
     default:
-      return buildPhotoShowcaseScene(scene, duration, data.carTitle, style, transitionIndex);
+      return buildPhotoShowcaseScene(scene, duration, data.carTitle, format, style, transitionIndex);
   }
 }
 
@@ -1526,18 +1978,21 @@ function buildPhotoShowcaseScene(
   scene: Extract<MiddleScene, { kind: "showcase" }>,
   duration: number,
   carTitle: string,
+  format: VideoFormat,
   style: TemplateStyle,
   transitionIndex: number,
 ): RenderElement {
   const dynamic = style === "dynamic";
+  const palette = colorsFor(style);
   const slideDir = scene.photoNumber % 2 === 0 ? "270°" : "90°";
+  const title = truncateTitle(carTitle, format);
 
   return {
     name: `Showcase-${scene.photoNumber}`,
     type: "composition",
     track: 2,
     duration,
-    fill_color: COLORS.bg,
+    fill_color: palette.bg,
     animations: [sceneEnter(style, transitionIndex)],
     elements: [
       ...(dynamic ? [flashAccent()] : []),
@@ -1568,7 +2023,7 @@ function buildPhotoShowcaseScene(
         background_x_padding: "45%",
         background_y_padding: "40%",
         background_border_radius: "25%",
-        fill_color: COLORS.text,
+        fill_color: palette.text,
         animations: dynamic ? [popIn(0.05)] : [quickFade(0)],
       },
       {
@@ -1581,13 +2036,11 @@ function buildPhotoShowcaseScene(
         width: "92%",
         x_alignment: "50%",
         y_anchor: "100%",
-        text: carTitle,
+        text: title,
         font_family: "Montserrat",
         font_weight: "700",
-        font_size: "3 vmin",
-        fill_color: COLORS.text,
-        stroke_color: "rgba(0,0,0,0.55)",
-        stroke_width: "0.1 vmin",
+        font_size: format === "youtube" ? "2.6 vmin" : "3 vmin",
+        fill_color: palette.text,
         animations: dynamic ? [textSlideUp(0.12)] : [quickFade(0.1)],
       },
     ],
@@ -1599,16 +2052,20 @@ function buildPhotoShowcaseScene(
 function buildOutroScene(
   data: CarVideoFormData,
   duration: number,
+  format: VideoFormat,
   style: TemplateStyle,
   transitionIndex: number,
 ): RenderElement {
   const dynamic = style === "dynamic";
+  const palette = colorsFor(style);
+  const typo = outroTypography(format);
+
   return {
     name: "Outro",
     type: "composition",
     track: 2,
     duration,
-    fill_color: COLORS.bg,
+    fill_color: palette.bg,
     animations: [sceneEnter(style, transitionIndex)],
     elements: [
       ...(dynamic ? [flashAccent()] : []),
@@ -1621,8 +2078,8 @@ function buildOutroScene(
         height: "100%",
         path: rectPath(),
         fill_color: [
-          { offset: "0%", color: COLORS.panelLight },
-          { offset: "100%", color: COLORS.bg },
+          { offset: "0%", color: palette.panelLight },
+          { offset: "100%", color: palette.bg },
         ],
       },
       {
@@ -1631,15 +2088,15 @@ function buildOutroScene(
         track: 2,
         time: 0,
         duration,
-        y: "38%",
+        y: typo.ctaY,
         width: "90%",
         x_alignment: "50%",
         y_alignment: "100%",
-        text: data.ctaMain,
+        text: truncateLabel(data.ctaMain, 28),
         font_family: "Montserrat",
         font_weight: "800",
-        font_size: "8 vmin",
-        fill_color: COLORS.text,
+        font_size: typo.ctaSize,
+        fill_color: palette.text,
         animations: dynamic ? [popIn(0), quickFade(0)] : [quickFade(0)],
       },
       {
@@ -1648,15 +2105,15 @@ function buildOutroScene(
         track: 3,
         time: 0,
         duration,
-        y: "54%",
+        y: typo.phoneY,
         width: "90%",
         x_alignment: "50%",
-        text: data.phone,
+        text: truncateLabel(data.phone, 22),
         font_family: "Roboto Condensed",
         font_weight: "700",
-        font_size: "5 vmin",
+        font_size: typo.phoneSize,
         letter_spacing: "5%",
-        fill_color: COLORS.accent,
+        fill_color: palette.accent,
         animations: dynamic ? [textSlideUp(0.15)] : [quickFade(0.1)],
       },
       {
@@ -1665,13 +2122,13 @@ function buildOutroScene(
         track: 4,
         time: 0,
         duration,
-        y: "66%",
+        y: typo.addressY,
         width: "90%",
         x_alignment: "50%",
-        text: data.address,
+        text: truncateSubtitle(data.address, format),
         font_family: "Roboto Condensed",
-        font_size: "2.6 vmin",
-        fill_color: COLORS.textMuted,
+        font_size: typo.addressSize,
+        fill_color: palette.textMuted,
         animations: dynamic ? [slideIn("0°", 0.25)] : [quickFade(0.2)],
       },
     ],
@@ -1687,88 +2144,75 @@ export function buildRenderScript(
   const style = formData.templateStyle === "dynamic" ? "dynamic" : "classic";
   const { width, height } = formatDimensions(format);
   const photos = formData.photos.map((p) => p.trim()).filter(Boolean);
-  const middleScenes = planMiddleScenes(photos);
-  const middleDuration = calcMiddleSceneDuration(middleScenes.length);
+  const specChunks = collectSpecChunks(formData);
+  const specSceneCount = Math.min(specChunks.length, MAX_SPEC_SCENES);
+  const galleryStartIndex = specSceneCount > 0 ? 1 + specSceneCount : 1;
+  const middleScenes = planMiddleScenes(photos, format, galleryStartIndex);
+
+  const schedule = buildSceneSchedule(photos, format, {
+    photoVoiceovers: formData.photoVoiceovers,
+    photoVoiceoverDurations: formData.photoVoiceoverDurations,
+  }, specSceneCount);
 
   let transitionIndex = 0;
 
-  const plans: ScenePlan[] = [
-    {
-      name: "intro",
-      duration: BASE_DURATION.intro,
-      build: (time) => ({
-        ...buildIntroScene(formData, BASE_DURATION.intro, style),
-        time,
-      }),
-    },
-    {
-      name: "hero",
-      duration: BASE_DURATION.hero,
-      build: (time) => ({
-        ...buildHeroScene(
-          photos[0],
-          formData,
-          BASE_DURATION.hero,
-          style,
-          ++transitionIndex,
-        ),
-        time,
-      }),
-    },
-    {
-      name: "specs",
-      duration: BASE_DURATION.specs,
-      build: (time) => ({
-        ...buildSpecsScene(
-          photos[1],
-          formData,
-          BASE_DURATION.specs,
-          format,
-          style,
-          ++transitionIndex,
-        ),
-        time,
-      }),
-    },
-    ...middleScenes.map((scene, index): ScenePlan => ({
-      name: `middle-${index}`,
-      duration: middleDuration,
-      build: (time) => ({
-        ...buildMiddleScene(
+  const sceneElements = schedule.map((entry) => {
+    const duration = entry.duration;
+    let element: RenderElement;
+
+    if (entry.name === "intro") {
+      element = buildIntroScene(formData, duration, format, style);
+    } else if (entry.name === "hero") {
+      element = buildHeroScene(
+        photos[0],
+        formData,
+        duration,
+        format,
+        style,
+        ++transitionIndex,
+      );
+    } else if (entry.name.startsWith("spec-chunk-")) {
+      const chunkIdx = Number.parseInt(entry.name.replace("spec-chunk-", ""), 10);
+      const chunk = specChunks[chunkIdx] ?? specChunks[0]!;
+      const photoUrl = photos[entry.photoIndices[0] ?? 1] ?? photos[1] ?? "";
+      element = buildSpecChunkScene(
+        photoUrl,
+        chunk,
+        duration,
+        format,
+        style,
+        ++transitionIndex,
+      );
+    } else if (entry.name === "outro") {
+      element = buildOutroScene(
+        formData,
+        duration,
+        format,
+        style,
+        ++transitionIndex,
+      );
+    } else {
+      const middleIdx = Number.parseInt(entry.name.replace("middle-", ""), 10);
+      const scene = middleScenes[middleIdx];
+      if (!scene) {
+        element = { name: entry.name, type: "composition", track: 2, duration, fill_color: COLORS.bg };
+      } else {
+        element = buildMiddleScene(
           scene,
           formData,
-          middleDuration,
+          duration,
           format,
           style,
           ++transitionIndex,
-        ),
-        time,
-      }),
-    })),
-    {
-      name: "outro",
-      duration: BASE_DURATION.outro,
-      build: (time) => ({
-        ...buildOutroScene(
-          formData,
-          BASE_DURATION.outro,
-          style,
-          ++transitionIndex,
-        ),
-        time,
-      }),
-    },
-  ];
+        );
+      }
+    }
 
-  const totalDuration = plans.reduce((sum, p) => sum + p.duration, 0);
-  const sceneElements = plans.map((p) => p.build(0)).map((el, i) => {
-    const time = plans.slice(0, i).reduce((sum, p) => sum + p.duration, 0);
-    return { ...el, time };
+    return { ...element, time: entry.startTime };
   });
 
   const audioElements: RenderElement[] = [buildMusicElement(formData)];
-  const voiceover = buildVoiceoverElement(formData);
-  if (voiceover) audioElements.push(voiceover);
+  audioElements.push(...buildVoiceoverElements(formData, schedule));
 
   return {
     output_format: "mp4",

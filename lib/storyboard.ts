@@ -328,6 +328,30 @@ export function normalizePhotoAnalyzeResult(
     });
   }
 
+  const safeVoiceover: Record<LanguageCode, string> = {
+    tr: "Bu açıdan aracın güçlü hatlarını net görebiliyorsunuz.",
+    en: "From this angle you can see the car's strong lines clearly.",
+    es: "Desde este ángulo se aprecian claramente las líneas del vehículo.",
+    fr: "Sous cet angle, les lignes du véhicule ressortent clairement.",
+    de: "Aus diesem Winkel wirken die Linien des Fahrzeugs besonders klar.",
+    it: "Da questa angolazione si vedono bene le linee della vettura.",
+    ru: "С этого ракурса хорошо видны сильные линии автомобиля.",
+    pt: "Neste ângulo, as linhas do carro ficam bem evidentes.",
+  };
+
+  if (wantVoiceover && videoLanguage !== "tr") {
+    storyboard = storyboard.map((s) => {
+      const vo = (s.voiceover_text ?? "").trim();
+      if (!vo) {
+        return { ...s, voiceover_text: safeVoiceover[videoLanguage] ?? safeVoiceover.en };
+      }
+      if (looksTurkish(vo)) {
+        return { ...s, voiceover_text: safeVoiceover[videoLanguage] ?? safeVoiceover.en };
+      }
+      return s;
+    });
+  }
+
   storyboard = repairStoryboard(storyboard, photoCount, videoLanguage);
   dedupeCategoryIds(storyboard);
   normalizeStoryboardDurations(storyboard);

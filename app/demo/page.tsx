@@ -29,14 +29,16 @@ import {
   type CurrencyCode,
 } from "@/lib/money";
 import {
-  BODY_OPTIONS,
-  COLOR_OPTIONS,
-  CONDITION_OPTIONS,
-  DRIVETRAIN_OPTIONS,
-  FUEL_OPTIONS,
-  GEARBOX_OPTIONS,
-  YES_NO_OPTIONS,
+  bodyOptions,
+  colorOptions,
+  conditionOptions,
+  drivetrainOptions,
+  fuelOptions,
+  gearboxOptions,
+  selectEmptyLabel,
+  yesNoOptions,
 } from "@/lib/vehicleFieldOptions";
+import { conditionDefault, localizeFormForVideo } from "@/lib/vehicleEnums";
 import {
   normalizePhotoAnalyzeResult,
   getFlowRecommendation,
@@ -44,10 +46,8 @@ import {
   type FlowRecommendation,
 } from "@/lib/storyboard";
 import { formToCreatomatePayload, type DemoFormData } from "@/lib/formToCreatomate";
-import {
-  buildVoiceoverScript,
-  orderPhotosFromStoryboard,
-} from "@/lib/photoOrder";
+import { aspectRatioForFormat } from "@/lib/templateFormat";
+import { orderPhotosWithVoiceover } from "@/lib/photoOrder";
 
 const MIN_PHOTOS = 8;
 const MAX_PHOTOS = 15;
@@ -65,7 +65,7 @@ const PLACEHOLDER_PHOTOS = [
 
 type Step = "upload" | "identify" | "analyzing" | "preview";
 type TemplateStyle = "classic" | "dynamic";
-type VideoFormat = "reels" | "youtube";
+type VideoFormat = "reels" | "youtube" | "square";
 
 const INPUT_CLS =
   "w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-sm text-[var(--foreground)] placeholder-[var(--muted-foreground)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/20 focus:border-[var(--ring)]";
@@ -109,6 +109,35 @@ const UI_I18N: Record<LanguageCode, Record<string, string>> = {
     year: "Yıl",
     price: "Fiyat",
     km: "KM",
+    basicInfo: "Temel bilgiler",
+    techInfo: "Teknik bilgiler",
+    series: "Seri",
+    enginePower: "Motor gücü",
+    engineDisplacement: "Motor hacmi",
+    gearbox: "Vites",
+    fuel: "Yakıt tipi",
+    drivetrain: "Çekiş",
+    showLess: "Daha az göster",
+    showMoreDetails: "Kasa tipi ve diğer detaylar",
+    bodyType: "Kasa tipi",
+    color: "Renk",
+    engine: "Motor",
+    condition: "Araç durumu",
+    warranty: "Garanti",
+    damageRecord: "Ağır hasar kaydı",
+    plateNationality: "Plaka / uyruk",
+    listingDate: "İlan tarihi",
+    phoneOptional: "Telefon (opsiyonel)",
+    identifyFailed: "AI araç tanıma başarısız",
+    retry: "Tekrar dene",
+    enterPrice: "Lütfen fiyat bilgisini girin.",
+    enterKm: "Lütfen kilometre bilgisini girin.",
+    reviewAutofill: "Otomatik doldurulan bilgiler hatalı olabilir. Lütfen kontrol edin.",
+    voiceoverSection: "Seslendirme",
+    voiceoverToggle:
+      "Videoya AI seslendirmesi ekle (isteğe bağlı). Açıkken her sahne için söylenecek metin kurguda üretilir.",
+    voiceoverUsesVideoLang: "Seslendirme dili video diliyle aynıdır.",
+    musicLevel: "Müzik seviyesi",
   },
   en: {
     preview: "Preview",
@@ -130,6 +159,35 @@ const UI_I18N: Record<LanguageCode, Record<string, string>> = {
     year: "Year",
     price: "Price",
     km: "Mileage",
+    basicInfo: "Basic info",
+    techInfo: "Technical details",
+    series: "Series",
+    enginePower: "Engine power",
+    engineDisplacement: "Engine displacement",
+    gearbox: "Gearbox",
+    fuel: "Fuel type",
+    drivetrain: "Drivetrain",
+    showLess: "Show less",
+    showMoreDetails: "Body type and other details",
+    bodyType: "Body type",
+    color: "Color",
+    engine: "Engine",
+    condition: "Condition",
+    warranty: "Warranty",
+    damageRecord: "Major damage record",
+    plateNationality: "Plate / registration",
+    listingDate: "Listing date",
+    phoneOptional: "Phone (optional)",
+    identifyFailed: "AI vehicle identification failed",
+    retry: "Try again",
+    enterPrice: "Please enter the price.",
+    enterKm: "Please enter the mileage.",
+    reviewAutofill: "Auto-filled details may be incorrect. Please review.",
+    voiceoverSection: "Voiceover",
+    voiceoverToggle:
+      "Add AI voiceover to the video (optional). When enabled, spoken text is generated per scene.",
+    voiceoverUsesVideoLang: "Voiceover uses the same language as the video.",
+    musicLevel: "Music level",
   },
   es: {},
   fr: {},
@@ -232,7 +290,7 @@ function isValidHttpUrl(value: string): boolean {
   }
 }
 
-function emptyForm(): DemoFormData {
+function emptyForm(lang: LanguageCode = "tr"): DemoFormData {
   return {
     carBrand: "",
     carModel: "",
@@ -246,7 +304,7 @@ function emptyForm(): DemoFormData {
     yakit: "",
     kasa: "",
     seri: "",
-    aracDurumu: "İkinci El",
+    aracDurumu: conditionDefault(lang),
     motorGucu: "",
     motorHacmi: "",
     cekis: "",
@@ -309,6 +367,7 @@ export default function DemoPage() {
 
   useEffect(() => {
     setCurrency(defaultCurrencyForLanguage(videoLanguage));
+    setForm((prev) => localizeFormForVideo(prev, videoLanguage));
   }, [videoLanguage]);
 
   const identifyCarFromPhotos = useCallback(
@@ -370,12 +429,12 @@ export default function DemoPage() {
     setOrderedPhotoUrls([]);
     setStep("analyzing");
 
-    const aspectRatio = format === "reels" ? "9:16" : "16:9";
+    const aspectRatio = aspectRatioForFormat(format);
 
     try {
       let photosForRender = validPhotoUrls;
       let analysis: PhotoAnalyzeResult | null = null;
-      let voiceoverText: string | undefined;
+      let photoVoiceovers: string[] | undefined;
 
       if (voiceoverEnabled) {
         setAnalyzePhase("AI seslendirme metni hazırlanıyor…");
@@ -426,11 +485,13 @@ export default function DemoPage() {
           voiceover: true,
           videoLanguage,
         });
-        photosForRender = orderPhotosFromStoryboard(validPhotoUrls, analysis.storyboard);
-        voiceoverText = buildVoiceoverScript(analysis.storyboard);
+        const ordered = orderPhotosWithVoiceover(validPhotoUrls, analysis.storyboard);
+        photosForRender = ordered.map((item) => item.url);
+        photoVoiceovers = ordered.map((item) => item.voiceoverText);
 
-        if (!voiceoverText) {
+        if (!photoVoiceovers.some((line) => line.trim())) {
           setVoiceoverTtsNotice("Seslendirme metni üretilemedi; video sessiz oluşturulacak.");
+          photoVoiceovers = undefined;
         }
 
         setAnalysisResult(analysis);
@@ -441,7 +502,9 @@ export default function DemoPage() {
       setOrderedPhotoUrls(photosForRender);
 
       setAnalyzePhase(
-        voiceoverText ? "Seslendirme ve video hazırlanıyor…" : "Video render ediliyor…",
+        photoVoiceovers?.some((line) => line.trim())
+          ? "Seslendirme ve video hazırlanıyor…"
+          : "Video render ediliyor…",
       );
 
       const musicTrack = resolveMusicTrack(musicTrackId);
@@ -459,8 +522,8 @@ export default function DemoPage() {
           musicSource,
           musicVolume,
         }),
-        ...(voiceoverText
-          ? { voiceoverText, voiceoverLanguage: videoLanguage }
+        ...(photoVoiceovers?.some((line) => line.trim())
+          ? { photoVoiceovers, voiceoverLanguage: videoLanguage }
           : {}),
       };
 
@@ -695,7 +758,8 @@ function UploadStep({
     onPhotoUrlsChange([...PLACEHOLDER_PHOTOS]);
   };
 
-  const formatLabel = format === "reels" ? "9:16 Reels" : "16:9 YouTube";
+  const formatLabel =
+    format === "reels" ? "9:16 Reels" : format === "square" ? "1:1 Instagram" : "16:9 YouTube";
   const validUrls = photoUrls.map((u) => u.trim()).filter(isValidHttpUrl);
 
   return (
@@ -852,8 +916,8 @@ function UploadStep({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {(
                   [
-                    ["classic", "Klasik", "Sade · Premium · Güvenilir"],
-                    ["dynamic", "Dinamik", "Enerjik · Modern · Hızlı"],
+                    ["classic", "Klasik", "Koyu · kırmızı vurgu · premium"],
+                    ["dynamic", "Modern", "Teal · turuncu · CarStudio"],
                   ] as const
                 ).map(([id, label, desc]) => {
                   const active = templateStyle === id;
@@ -891,6 +955,7 @@ function UploadStep({
                   {(
                     [
                       ["reels", "9:16", "Reels / Shorts", "▯"],
+                      ["square", "1:1", "Instagram", "◻"],
                       ["youtube", "16:9", "YouTube", "▬"],
                     ] as const
                   ).map(([value, ratio, sub, icon]) => {
@@ -979,7 +1044,9 @@ function UploadStep({
                   ))}
                 </select>
                 <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--muted)] px-3 py-2.5">
-                  <span className="text-xs text-[var(--muted-foreground)]">Müzik seviyesi</span>
+                  <span className="text-xs text-[var(--muted-foreground)]">
+                    {uiT(videoLanguage, "musicLevel")}
+                  </span>
                   <span className="text-xs font-semibold text-[var(--foreground)] tabular-nums">
                     {musicVolume.toFixed(2)}
                   </span>
@@ -989,7 +1056,7 @@ function UploadStep({
               <div className="pt-2 space-y-3 border-t border-[var(--border)]">
                 <div className="demo-section-label flex items-center gap-2 pt-1">
                   <Mic className="w-4 h-4 text-[var(--primary)]" />
-                  Seslendirme
+                  {uiT(videoLanguage, "voiceoverSection")}
                 </div>
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
@@ -999,12 +1066,11 @@ function UploadStep({
                     className="mt-1 rounded border-[var(--border)]"
                   />
                   <span className="text-sm text-[var(--foreground)] leading-snug">
-                    Videoya AI seslendirmesi ekle (isteğe bağlı). Açıkken her sahne için söylenecek
-                    metin kurguda üretilir.
+                    {uiT(videoLanguage, "voiceoverToggle")}
                   </span>
                 </label>
                 <div className="text-xs text-[var(--muted-foreground)]">
-                  Seslendirme dili video diliyle aynıdır.
+                  {uiT(videoLanguage, "voiceoverUsesVideoLang")}
                 </div>
               </div>
             </div>
@@ -1083,12 +1149,20 @@ function IdentifyStep({
   videoLanguage: LanguageCode;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const emptyLabel = selectEmptyLabel(videoLanguage);
+  const gearboxOpts = useMemo(() => gearboxOptions(videoLanguage), [videoLanguage]);
+  const fuelOpts = useMemo(() => fuelOptions(videoLanguage), [videoLanguage]);
+  const drivetrainOpts = useMemo(() => drivetrainOptions(videoLanguage), [videoLanguage]);
+  const bodyOpts = useMemo(() => bodyOptions(videoLanguage), [videoLanguage]);
+  const colorOpts = useMemo(() => colorOptions(videoLanguage), [videoLanguage]);
+  const conditionOpts = useMemo(() => conditionOptions(videoLanguage), [videoLanguage]);
+  const yesNoOpts = useMemo(() => yesNoOptions(videoLanguage), [videoLanguage]);
   const requiredMissing = useMemo(() => {
     const missing: string[] = [];
-    if (!form.price.trim()) missing.push("Fiyat");
-    if (!form.km.trim()) missing.push("KM");
+    if (!form.price.trim()) missing.push(uiT(videoLanguage, "price"));
+    if (!form.km.trim()) missing.push(uiT(videoLanguage, "km"));
     return missing;
-  }, [form.km, form.price]);
+  }, [form.km, form.price, videoLanguage]);
   const canConfirm = !isIdentifying && requiredMissing.length === 0;
   const showRequiredUi = identifyAttempted && !isIdentifying;
   const isPriceMissing = showRequiredUi && !form.price.trim();
@@ -1147,14 +1221,14 @@ function IdentifyStep({
             role="alert"
             className="rounded-[var(--radius)] border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 px-4 py-3 text-sm text-[var(--destructive)]"
           >
-            <p className="font-medium">AI araç tanıma başarısız</p>
+            <p className="font-medium">{uiT(videoLanguage, "identifyFailed")}</p>
             <p className="mt-1 text-xs leading-relaxed opacity-90">{identifyError}</p>
             <button
               type="button"
               onClick={onRetry}
               className="mt-3 text-xs font-semibold underline hover:opacity-80"
             >
-              Tekrar dene
+              {uiT(videoLanguage, "retry")}
             </button>
           </div>
         )}
@@ -1166,7 +1240,7 @@ function IdentifyStep({
         >
           <div>
             <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-3">
-              Temel bilgiler
+              {uiT(videoLanguage, "basicInfo")}
             </div>
             <div className="grid grid-cols-2 gap-3">
               {(["carBrand", "carModel", "year", "price"] as const).map((field) => (
@@ -1232,7 +1306,7 @@ function IdentifyStep({
                   )}
                   {field === "price" && isPriceMissing && (
                     <div className="mt-1 text-[11px] text-amber-700">
-                      Lütfen fiyat bilgisini girin.
+                      {uiT(videoLanguage, "enterPrice")}
                     </div>
                   )}
                 </div>
@@ -1242,15 +1316,23 @@ function IdentifyStep({
 
           <div>
             <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-3">
-              Teknik bilgiler
+              {uiT(videoLanguage, "techInfo")}
             </div>
             <div className="grid grid-cols-2 gap-3">
               {(
                 [
-                  ["seri", "Seri", placeholderFor(videoLanguage, "series")],
-                  ["km", "KM", placeholderFor(videoLanguage, "km")],
-                  ["motorGucu", "Motor Gücü", placeholderFor(videoLanguage, "enginePower")],
-                  ["motorHacmi", "Motor Hacmi", placeholderFor(videoLanguage, "engineDisplacement")],
+                  ["seri", uiT(videoLanguage, "series"), placeholderFor(videoLanguage, "series")],
+                  ["km", uiT(videoLanguage, "km"), placeholderFor(videoLanguage, "km")],
+                  [
+                    "motorGucu",
+                    uiT(videoLanguage, "enginePower"),
+                    placeholderFor(videoLanguage, "enginePower"),
+                  ],
+                  [
+                    "motorHacmi",
+                    uiT(videoLanguage, "engineDisplacement"),
+                    placeholderFor(videoLanguage, "engineDisplacement"),
+                  ],
                 ] as [keyof DemoFormData, string, string][]
               ).map(([field, label, ph]) => (
                 <div key={field}>
@@ -1258,7 +1340,7 @@ function IdentifyStep({
                     <span>{label}</span>
                     {showRequiredUi && field === "km" && (
                       <span className="text-[10px] font-semibold text-amber-700 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                        Zorunlu
+                        {uiT(videoLanguage, "required")}
                       </span>
                     )}
                   </label>
@@ -1270,24 +1352,28 @@ function IdentifyStep({
                   />
                   {field === "km" && isKmMissing && (
                     <div className="mt-1 text-[11px] text-amber-700">
-                      Lütfen kilometre bilgisini girin.
+                      {uiT(videoLanguage, "enterKm")}
                     </div>
                   )}
                 </div>
               ))}
               <div>
-                <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Vites</label>
-                {enumSelect(form.vites, (v) => onFormChange("vites", v), GEARBOX_OPTIONS, "— Seçin —")}
+                <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
+                  {uiT(videoLanguage, "gearbox")}
+                </label>
+                {enumSelect(form.vites, (v) => onFormChange("vites", v), gearboxOpts, emptyLabel)}
               </div>
               <div>
                 <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
-                  Yakıt tipi
+                  {uiT(videoLanguage, "fuel")}
                 </label>
-                {enumSelect(form.yakit, (v) => onFormChange("yakit", v), FUEL_OPTIONS, "— Seçin —")}
+                {enumSelect(form.yakit, (v) => onFormChange("yakit", v), fuelOpts, emptyLabel)}
               </div>
               <div className="col-span-2">
-                <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Çekiş</label>
-                {enumSelect(form.cekis, (v) => onFormChange("cekis", v), DRIVETRAIN_OPTIONS, "— Seçin —")}
+                <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
+                  {uiT(videoLanguage, "drivetrain")}
+                </label>
+                {enumSelect(form.cekis, (v) => onFormChange("cekis", v), drivetrainOpts, emptyLabel)}
               </div>
             </div>
           </div>
@@ -1301,22 +1387,26 @@ function IdentifyStep({
               <ChevronDown
                 className={`w-3.5 h-3.5 transition-transform shrink-0 ${detailsOpen ? "rotate-180" : ""}`}
               />
-              {detailsOpen ? "Daha az göster" : "Kasa tipi ve diğer detaylar"}
+              {detailsOpen ? uiT(videoLanguage, "showLess") : uiT(videoLanguage, "showMoreDetails")}
             </button>
             {detailsOpen && (
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
-                    Kasa tipi
+                    {uiT(videoLanguage, "bodyType")}
                   </label>
-                  {enumSelect(form.kasa, (v) => onFormChange("kasa", v), BODY_OPTIONS, "— Seçin —")}
+                  {enumSelect(form.kasa, (v) => onFormChange("kasa", v), bodyOpts, emptyLabel)}
                 </div>
                 <div>
-                  <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Renk</label>
-                  {enumSelect(form.renk, (v) => onFormChange("renk", v), COLOR_OPTIONS, "— Seçin —")}
+                  <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
+                    {uiT(videoLanguage, "color")}
+                  </label>
+                  {enumSelect(form.renk, (v) => onFormChange("renk", v), colorOpts, emptyLabel)}
                 </div>
                 <div>
-                  <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Motor</label>
+                  <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
+                    {uiT(videoLanguage, "engine")}
+                  </label>
                   <input
                     value={form.motor}
                     onChange={(e) => onFormChange("motor", e.target.value)}
@@ -1326,38 +1416,35 @@ function IdentifyStep({
                 </div>
                 <div>
                   <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
-                    Araç durumu
+                    {uiT(videoLanguage, "condition")}
                   </label>
                   {enumSelect(
                     form.aracDurumu,
                     (v) => onFormChange("aracDurumu", v),
-                    CONDITION_OPTIONS,
-                    "— Seçin —"
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Garanti</label>
-                  {enumSelect(
-                    form.garanti,
-                    (v) => onFormChange("garanti", v),
-                    YES_NO_OPTIONS,
-                    "— Seçin —"
+                    conditionOpts,
+                    emptyLabel,
                   )}
                 </div>
                 <div>
                   <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
-                    Ağır hasar kaydı
+                    {uiT(videoLanguage, "warranty")}
+                  </label>
+                  {enumSelect(form.garanti, (v) => onFormChange("garanti", v), yesNoOpts, emptyLabel)}
+                </div>
+                <div>
+                  <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
+                    {uiT(videoLanguage, "damageRecord")}
                   </label>
                   {enumSelect(
                     form.agirHasarKayitli,
                     (v) => onFormChange("agirHasarKayitli", v),
-                    YES_NO_OPTIONS,
-                    "— Seçin —"
+                    yesNoOpts,
+                    emptyLabel,
                   )}
                 </div>
                 <div>
                   <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
-                    Plaka / uyruk
+                    {uiT(videoLanguage, "plateNationality")}
                   </label>
                   <input
                     value={form.plaka}
@@ -1368,7 +1455,7 @@ function IdentifyStep({
                 </div>
                 <div>
                   <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
-                    İlan tarihi
+                    {uiT(videoLanguage, "listingDate")}
                   </label>
                   <input
                     value={form.ilanTarihi}
@@ -1380,7 +1467,7 @@ function IdentifyStep({
                 <div className="col-span-2">
                   <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
                     <Phone className="w-3 h-3 inline mr-1" />
-                    Telefon (opsiyonel)
+                    {uiT(videoLanguage, "phoneOptional")}
                   </label>
                   <input
                     value={form.ctaPhone}
@@ -1396,7 +1483,7 @@ function IdentifyStep({
 
         {showRequiredUi && (
           <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--muted)] px-4 py-3 text-xs text-[var(--muted-foreground)]">
-            Otomatik doldurulan bilgiler hatalı olabilir. Lütfen kontrol edin.
+            {uiT(videoLanguage, "reviewAutofill")}
           </div>
         )}
         <div className="flex flex-col sm:flex-row gap-3">
@@ -1490,7 +1577,7 @@ function PreviewStep({
   ttsNotice: string;
   onReset: () => void;
 }) {
-  const isPortrait = format === "reels";
+  const isPortrait = format !== "youtube";
   const formattedPrice =
     formatPrice(form.price, { language: videoLanguage, currency, style: "number" }) ??
     form.price;
@@ -1530,8 +1617,8 @@ function PreviewStep({
             {form.carBrand} {form.carModel}
           </h2>
           <p className="text-[var(--muted-foreground)] text-sm mt-1">
-            {photoUrls.length} sahne · {format === "reels" ? "9:16 Reels" : "16:9 YouTube"} ·{" "}
-            {templateStyle === "classic" ? "Klasik" : "Dinamik"} şablon
+            {photoUrls.length} sahne · {format === "reels" ? "9:16 Reels" : format === "square" ? "1:1 Instagram" : "16:9 YouTube"} ·{" "}
+            {templateStyle === "classic" ? "Klasik" : "Modern"} şablon
             {voiceoverEnabled && (
               <span className="block mt-1 text-[11px]">Seslendirme: istendi</span>
             )}

@@ -6,7 +6,10 @@ import {
   type VideoFormat,
 } from "@/app/lib/template";
 import { getPublicBaseUrl, isPubliclyReachable } from "@/lib/publicBaseUrl";
+import { preparePhotoVoiceovers } from "@/lib/preparePhotoVoiceovers";
 import { resolveVoiceoverSourceForCreatomate } from "@/lib/resolveVoiceoverSource";
+import { isPlaceholderDealerName } from "@/lib/videoTemplateI18n";
+import { parseLanguageCode } from "@/lib/languages";
 
 const CREATOMATE_API_URL = "https://api.creatomate.com/v2/renders";
 const POLL_INTERVAL_MS = 3000;
@@ -75,6 +78,7 @@ function normalizePhotos(photos: unknown): string[] {
 
 type RenderRequestBody = CarVideoFormData & {
   voiceoverText?: string;
+  photoVoiceovers?: string[];
   voiceoverLanguage?: string;
 };
 
@@ -114,7 +118,11 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as RenderRequestBody;
     const photos = normalizePhotos(body.photos);
     const format: VideoFormat =
-      body.format === "youtube" ? "youtube" : "reels";
+      body.format === "youtube"
+        ? "youtube"
+        : body.format === "square"
+          ? "square"
+          : "reels";
     const templateStyle: TemplateStyle =
       body.templateStyle === "dynamic" ? "dynamic" : "classic";
 
@@ -133,16 +141,35 @@ export async function POST(request: NextRequest) {
     }
 
     const voiceoverText = body.voiceoverText?.trim();
+    const photoVoiceovers = body.photoVoiceovers?.map((line) => line.trim());
     let voiceoverAudioSource: string | undefined;
+    let photoVoiceoverDurations: number[] | undefined;
+    let photoVoiceoverSources: string[] | undefined;
 
-    if (!voiceoverText) {
+    const videoLanguage = parseLanguageCode(body.videoLanguage, "tr");
+    const voiceoverLanguage = parseLanguageCode(
+      body.voiceoverLanguage ?? body.videoLanguage,
+      videoLanguage,
+    );
+
+    if (photoVoiceovers?.some((line) => line.trim())) {
+      const prepared = await preparePhotoVoiceovers(
+        request,
+        photoVoiceovers,
+        voiceoverLanguage,
+      );
+      photoVoiceoverDurations = prepared.durations;
+      if (prepared.sources?.some((url) => url.trim())) {
+        photoVoiceoverSources = prepared.sources;
+      }
+    } else if (!voiceoverText) {
       voiceoverAudioSource = await resolveVoiceoverSourceForCreatomate(request, {
         voiceoverAudioSource: body.voiceoverAudioSource,
       });
     }
 
     const formData: CarVideoFormData = {
-      dealerName: body.dealerName ?? "",
+      dealerName: isPlaceholderDealerName(body.dealerName) ? "" : (body.dealerName ?? ""),
       introSubtitle: body.introSubtitle ?? "",
       carTitle: body.carTitle ?? "",
       carSubtitle: body.carSubtitle ?? "",
@@ -151,15 +178,29 @@ export async function POST(request: NextRequest) {
       specFuel: body.specFuel ?? "",
       specGear: body.specGear ?? "",
       specYear: body.specYear ?? "",
+      specMotor: body.specMotor,
+      specColor: body.specColor,
+      specBody: body.specBody,
+      specSeries: body.specSeries,
+      specEnginePower: body.specEnginePower,
+      specEngineVolume: body.specEngineVolume,
+      specDrivetrain: body.specDrivetrain,
+      specCondition: body.specCondition,
+      specWarranty: body.specWarranty,
+      specDamage: body.specDamage,
       ctaMain: body.ctaMain ?? "",
       phone: body.phone ?? "",
       address: body.address ?? "",
       photos,
       format,
       templateStyle,
+      videoLanguage,
       musicSource: resolveMusicSource(request, body.musicSource),
       voiceoverText,
-      voiceoverLanguage: body.voiceoverLanguage,
+      photoVoiceovers,
+      photoVoiceoverDurations,
+      photoVoiceoverSources,
+      voiceoverLanguage,
       voiceoverAudioSource,
       musicVolume: body.musicVolume,
     };

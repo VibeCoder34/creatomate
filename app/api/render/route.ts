@@ -3,6 +3,7 @@ import {
   buildRenderScript,
   type CarVideoFormData,
   type TemplateStyle,
+  type TemplateEngine,
   type VideoFormat,
 } from "@/app/lib/template";
 import { getPublicBaseUrl, isPubliclyReachable } from "@/lib/publicBaseUrl";
@@ -125,6 +126,8 @@ export async function POST(request: NextRequest) {
           : "reels";
     const templateStyle: TemplateStyle =
       body.templateStyle === "dynamic" ? "dynamic" : "classic";
+    const templateEngine: TemplateEngine =
+      body.templateEngine === "studio" ? "studio" : "legacy";
 
     if (photos.length < MIN_PHOTOS) {
       return NextResponse.json(
@@ -194,6 +197,7 @@ export async function POST(request: NextRequest) {
       photos,
       format,
       templateStyle,
+      templateEngine,
       videoLanguage,
       musicSource: resolveMusicSource(request, body.musicSource),
       voiceoverText,

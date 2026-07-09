@@ -58,6 +58,7 @@ export function formToCreatomatePayload(
   opts: {
     format: "reels" | "youtube" | "square";
     templateStyle: "classic" | "dynamic";
+    templateEngine?: "legacy" | "studio";
     videoLanguage: LanguageCode;
     currency: CurrencyCode;
     musicSource?: string;
@@ -150,6 +151,7 @@ export function formToCreatomatePayload(
     photos,
     format: opts.format,
     templateStyle: opts.templateStyle,
+    templateEngine: opts.templateEngine ?? "legacy",
     videoLanguage: opts.videoLanguage,
     musicSource: opts.musicSource,
     voiceoverAudioSource: opts.voiceoverAudioSource,

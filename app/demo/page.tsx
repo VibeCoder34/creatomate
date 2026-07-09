@@ -48,6 +48,12 @@ import {
 import { formToCreatomatePayload, type DemoFormData } from "@/lib/formToCreatomate";
 import { aspectRatioForFormat } from "@/lib/templateFormat";
 import { orderPhotosWithVoiceover } from "@/lib/photoOrder";
+import {
+  describeSurpriseConfig,
+  generateSurpriseConfig,
+  shuffleArray,
+  type SurpriseConfig,
+} from "@/lib/surpriseMe";
 
 const MIN_PHOTOS = 8;
 const MAX_PHOTOS = 15;
@@ -65,6 +71,7 @@ const PLACEHOLDER_PHOTOS = [
 
 type Step = "upload" | "identify" | "analyzing" | "preview";
 type TemplateStyle = "classic" | "dynamic";
+type TemplateEngine = "legacy" | "studio";
 type VideoFormat = "reels" | "youtube" | "square";
 
 const INPUT_CLS =
@@ -138,6 +145,25 @@ const UI_I18N: Record<LanguageCode, Record<string, string>> = {
       "Videoya AI seslendirmesi ekle (isteğe bağlı). Açıkken her sahne için söylenecek metin kurguda üretilir.",
     voiceoverUsesVideoLang: "Seslendirme dili video diliyle aynıdır.",
     musicLevel: "Müzik seviyesi",
+    surpriseMe: "Beni şaşırt",
+    surpriseMeHint: "Şablon, format, müzik ve metinleri rastgele seçer",
+    surprisePreparing: "Sürpriz tasarım hazırlanıyor…",
+    surpriseAgain: "Başka bir sürpriz dene",
+    surprisePick: "Bu sürüm",
+    videoSettings: "Video ayarları",
+    videoSettingsHint: "Sadece «Videoyu oluştur» için geçerlidir — Beni şaşırt her şeyi rastgele seçer.",
+    createVideo: "Videoyu oluştur",
+    templateEngine: "Video motoru",
+    engineLegacy: "Klasik",
+    engineLegacyDesc: "Mevcut şablon sistemi",
+    engineStudio: "Studio Pro",
+    engineStudioDesc: "Fotoğraf sayısına göre tasarlanmış sahneler",
+    videoLook: "Video şablonu",
+    currentVideoLook: "Seçili",
+    templateClassic: "Klasik",
+    templateClassicDesc: "Koyu · kırmızı vurgu · foto odaklı",
+    templateModern: "Modern",
+    templateModernDesc: "Teal · turuncu · dinamik geçişler",
   },
   en: {
     preview: "Preview",
@@ -188,6 +214,25 @@ const UI_I18N: Record<LanguageCode, Record<string, string>> = {
       "Add AI voiceover to the video (optional). When enabled, spoken text is generated per scene.",
     voiceoverUsesVideoLang: "Voiceover uses the same language as the video.",
     musicLevel: "Music level",
+    surpriseMe: "Surprise me",
+    surpriseMeHint: "Picks template, format, music, and copy at random",
+    surprisePreparing: "Preparing a surprise design…",
+    surpriseAgain: "Try another surprise",
+    surprisePick: "This version",
+    videoSettings: "Video settings",
+    videoSettingsHint: "Only applies to «Create video» — Surprise me picks everything at random.",
+    createVideo: "Create video",
+    templateEngine: "Video engine",
+    engineLegacy: "Classic",
+    engineLegacyDesc: "Current template system",
+    engineStudio: "Studio Pro",
+    engineStudioDesc: "Photo-count blueprints with multi-photo scenes",
+    videoLook: "Video template",
+    currentVideoLook: "Selected",
+    templateClassic: "Classic",
+    templateClassicDesc: "Dark · red accent · photo-first",
+    templateModern: "Modern",
+    templateModernDesc: "Teal · orange · dynamic transitions",
   },
   es: {},
   fr: {},
@@ -343,6 +388,7 @@ export default function DemoPage() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [format, setFormat] = useState<VideoFormat>("reels");
   const [templateStyle, setTemplateStyle] = useState<TemplateStyle>("classic");
+  const [templateEngine, setTemplateEngine] = useState<TemplateEngine>("legacy");
   const [form, setForm] = useState<DemoFormData>(emptyForm);
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [identifyError, setIdentifyError] = useState("");
@@ -353,6 +399,7 @@ export default function DemoPage() {
   const [musicTrackId, setMusicTrackId] = useState<MusicTrackId>("smooth1");
   const [voiceoverEnabled, setVoiceoverEnabled] = useState(false);
   const [voiceoverTtsNotice, setVoiceoverTtsNotice] = useState("");
+  const [surpriseSummary, setSurpriseSummary] = useState("");
   const renderInFlightRef = useRef(false);
 
   const musicVolume = voiceoverEnabled ? 0.35 : 0.8;
@@ -417,26 +464,70 @@ export default function DemoPage() {
     setTimeout(() => identifyCarFromPhotos(validPhotoUrls), 0);
   }, [validPhotoUrls, identifyCarFromPhotos]);
 
-  const handleAnalyze = async () => {
+  const handleCreateVideo = async (options?: {
+    surprise?: SurpriseConfig;
+    reuseAnalysis?: boolean;
+  }) => {
     if (renderInFlightRef.current) return;
     renderInFlightRef.current = true;
+
+    const surprise = options?.surprise;
+    const reuseAnalysis = options?.reuseAnalysis ?? false;
 
     setAnalyzeError("");
     setRenderError("");
     setVoiceoverTtsNotice("");
     setVideoUrl(null);
-    setAnalysisResult(null);
-    setOrderedPhotoUrls([]);
+    if (!reuseAnalysis) {
+      setAnalysisResult(null);
+      setOrderedPhotoUrls([]);
+    }
+    if (surprise) {
+      setSurpriseSummary(describeSurpriseConfig(surprise, videoLanguage));
+      setFormat(surprise.format);
+      setTemplateStyle(surprise.templateStyle);
+      setTemplateEngine(surprise.templateEngine);
+      setMusicTrackId(surprise.musicTrackId);
+      setVoiceoverEnabled(surprise.voiceoverEnabled);
+      setForm((prev) => ({
+        ...prev,
+        introSubtitle: surprise.introSubtitle,
+        ctaMain: surprise.ctaMain,
+      }));
+    } else {
+      setSurpriseSummary("");
+    }
     setStep("analyzing");
 
-    const aspectRatio = aspectRatioForFormat(format);
+    const effectiveFormat = surprise?.format ?? format;
+    const effectiveTemplateStyle = surprise?.templateStyle ?? templateStyle;
+    const effectiveTemplateEngine = surprise?.templateEngine ?? templateEngine;
+    const effectiveMusicTrackId = surprise?.musicTrackId ?? musicTrackId;
+    const effectiveVoiceover = surprise?.voiceoverEnabled ?? voiceoverEnabled;
+    const effectiveMusicVolume = effectiveVoiceover ? 0.35 : 0.8;
+    const effectiveForm = surprise
+      ? {
+          ...form,
+          introSubtitle: surprise.introSubtitle,
+          ctaMain: surprise.ctaMain,
+        }
+      : form;
+
+    const aspectRatio = aspectRatioForFormat(effectiveFormat);
 
     try {
       let photosForRender = validPhotoUrls;
-      let analysis: PhotoAnalyzeResult | null = null;
+      let analysis: PhotoAnalyzeResult | null = reuseAnalysis ? analysisResult : null;
       let photoVoiceovers: string[] | undefined;
 
-      if (voiceoverEnabled) {
+      if (surprise) {
+        setAnalyzePhase(uiT(videoLanguage, "surprisePreparing"));
+      }
+
+      const shouldAnalyze =
+        effectiveVoiceover && (!reuseAnalysis || !analysisResult);
+
+      if (shouldAnalyze) {
         setAnalyzePhase("AI seslendirme metni hazırlanıyor…");
         const photos = validPhotoUrls.map((url, index) => ({ index, url }));
 
@@ -451,26 +542,26 @@ export default function DemoPage() {
             voiceover: true,
             voiceoverLanguage: videoLanguage,
             listing: {
-              carBrand: form.carBrand,
-              carModel: form.carModel,
-              year: form.year,
-              price: form.price,
-              ctaPhone: form.ctaPhone,
-              km: form.km,
-              motor: form.motor,
-              renk: form.renk,
-              vites: form.vites,
-              yakit: form.yakit,
-              kasa: form.kasa,
-              seri: form.seri,
-              aracDurumu: form.aracDurumu,
-              motorGucu: form.motorGucu,
-              motorHacmi: form.motorHacmi,
-              cekis: form.cekis,
-              garanti: form.garanti,
-              agirHasarKayitli: form.agirHasarKayitli,
-              plaka: form.plaka,
-              ilanTarihi: form.ilanTarihi,
+              carBrand: effectiveForm.carBrand,
+              carModel: effectiveForm.carModel,
+              year: effectiveForm.year,
+              price: effectiveForm.price,
+              ctaPhone: effectiveForm.ctaPhone,
+              km: effectiveForm.km,
+              motor: effectiveForm.motor,
+              renk: effectiveForm.renk,
+              vites: effectiveForm.vites,
+              yakit: effectiveForm.yakit,
+              kasa: effectiveForm.kasa,
+              seri: effectiveForm.seri,
+              aracDurumu: effectiveForm.aracDurumu,
+              motorGucu: effectiveForm.motorGucu,
+              motorHacmi: effectiveForm.motorHacmi,
+              cekis: effectiveForm.cekis,
+              garanti: effectiveForm.garanti,
+              agirHasarKayitli: effectiveForm.agirHasarKayitli,
+              plaka: effectiveForm.plaka,
+              ilanTarihi: effectiveForm.ilanTarihi,
             },
           }),
         });
@@ -495,6 +586,19 @@ export default function DemoPage() {
         }
 
         setAnalysisResult(analysis);
+      } else if (effectiveVoiceover && analysisResult) {
+        const basePhotos = orderedPhotoUrls.length ? orderedPhotoUrls : validPhotoUrls;
+        const ordered = orderPhotosWithVoiceover(basePhotos, analysisResult.storyboard);
+        photosForRender = ordered.map((item) => item.url);
+        photoVoiceovers = ordered.map((item) => item.voiceoverText);
+        if (!photoVoiceovers.some((line) => line.trim())) {
+          photoVoiceovers = undefined;
+        }
+        analysis = analysisResult;
+      } else if (surprise?.shufflePhotos && effectiveTemplateEngine === "legacy") {
+        photosForRender = shuffleArray(validPhotoUrls);
+      } else if (reuseAnalysis && orderedPhotoUrls.length) {
+        photosForRender = orderedPhotoUrls;
       } else {
         setAnalyzePhase("Video render ediliyor…");
       }
@@ -507,20 +611,21 @@ export default function DemoPage() {
           : "Video render ediliyor…",
       );
 
-      const musicTrack = resolveMusicTrack(musicTrackId);
+      const musicTrack = resolveMusicTrack(effectiveMusicTrackId);
       const musicSource =
-        musicTrackId !== "none" && musicTrack.src
+        effectiveMusicTrackId !== "none" && musicTrack.src
           ? `${window.location.origin}${musicTrack.src}`
           : undefined;
 
       const payload = {
-        ...formToCreatomatePayload(form, photosForRender, {
-          format,
-          templateStyle,
+        ...formToCreatomatePayload(effectiveForm, photosForRender, {
+          format: effectiveFormat,
+          templateStyle: effectiveTemplateStyle,
+          templateEngine: effectiveTemplateEngine,
           videoLanguage,
           currency,
           musicSource,
-          musicVolume,
+          musicVolume: effectiveMusicVolume,
         }),
         ...(photoVoiceovers?.some((line) => line.trim())
           ? { photoVoiceovers, voiceoverLanguage: videoLanguage }
@@ -558,6 +663,16 @@ export default function DemoPage() {
     } finally {
       renderInFlightRef.current = false;
     }
+  };
+
+  const handleAnalyze = () => handleCreateVideo();
+  const handleSurprise = () => handleCreateVideo({ surprise: generateSurpriseConfig(videoLanguage) });
+  const handleSurpriseAgain = () => {
+    const surprise = generateSurpriseConfig(videoLanguage);
+    handleCreateVideo({
+      surprise,
+      reuseAnalysis: surprise.voiceoverEnabled && Boolean(analysisResult),
+    });
   };
 
   const canProceed =
@@ -626,20 +741,11 @@ export default function DemoPage() {
             photoUrls={photoUrls}
             validCount={validPhotoUrls.length}
             error={analyzeError}
-            templateStyle={templateStyle}
-            onTemplateStyleChange={setTemplateStyle}
-            format={format}
-            onFormatChange={setFormat}
             flowRec={flowRec}
             videoLanguage={videoLanguage}
             videoNotes={videoNotes}
-            musicTrackId={musicTrackId}
-            musicVolume={musicVolume}
-            voiceoverEnabled={voiceoverEnabled}
             onVideoLanguageChange={setVideoLanguage}
             onVideoNotesChange={setVideoNotes}
-            onMusicTrackIdChange={setMusicTrackId}
-            onVoiceoverEnabledChange={setVoiceoverEnabled}
             onPhotoUrlsChange={setPhotoUrls}
             onNext={goToIdentify}
             canProceed={canProceed}
@@ -658,8 +764,20 @@ export default function DemoPage() {
             onFormChange={(field, value) => setForm((prev) => ({ ...prev, [field]: value }))}
             onRetry={() => identifyCarFromPhotos(validPhotoUrls)}
             onConfirm={handleAnalyze}
+            onSurprise={handleSurprise}
             onBack={() => setStep("upload")}
             videoLanguage={videoLanguage}
+            templateStyle={templateStyle}
+            onTemplateStyleChange={setTemplateStyle}
+            templateEngine={templateEngine}
+            onTemplateEngineChange={setTemplateEngine}
+            format={format}
+            onFormatChange={setFormat}
+            musicTrackId={musicTrackId}
+            onMusicTrackIdChange={setMusicTrackId}
+            voiceoverEnabled={voiceoverEnabled}
+            onVoiceoverEnabledChange={setVoiceoverEnabled}
+            musicVolume={musicVolume}
           />
         )}
 
@@ -676,15 +794,19 @@ export default function DemoPage() {
             analysisResult={analysisResult}
             format={format}
             templateStyle={templateStyle}
+            templateEngine={templateEngine}
             videoLanguage={videoLanguage}
             currency={currency}
             voiceoverEnabled={voiceoverEnabled}
             ttsNotice={voiceoverTtsNotice}
+            surpriseSummary={surpriseSummary}
+            onSurpriseAgain={handleSurpriseAgain}
             onReset={() => {
               setAnalysisResult(null);
               setVideoUrl(null);
               setRenderError("");
               setVoiceoverTtsNotice("");
+              setSurpriseSummary("");
               setOrderedPhotoUrls([]);
               setStep("upload");
             }}
@@ -699,20 +821,11 @@ function UploadStep({
   photoUrls,
   validCount,
   error,
-  templateStyle,
-  onTemplateStyleChange,
-  format,
-  onFormatChange,
   flowRec,
   videoLanguage,
   videoNotes,
-  musicTrackId,
-  musicVolume,
-  voiceoverEnabled,
   onVideoLanguageChange,
   onVideoNotesChange,
-  onMusicTrackIdChange,
-  onVoiceoverEnabledChange,
   onPhotoUrlsChange,
   onNext,
   canProceed,
@@ -720,20 +833,11 @@ function UploadStep({
   photoUrls: string[];
   validCount: number;
   error: string;
-  templateStyle: TemplateStyle;
-  onTemplateStyleChange: (s: TemplateStyle) => void;
-  format: VideoFormat;
-  onFormatChange: (f: VideoFormat) => void;
   flowRec: FlowRecommendation | null;
   videoLanguage: LanguageCode;
   videoNotes: string;
-  musicTrackId: MusicTrackId;
-  musicVolume: number;
-  voiceoverEnabled: boolean;
   onVideoLanguageChange: (v: LanguageCode) => void;
   onVideoNotesChange: (v: string) => void;
-  onMusicTrackIdChange: (v: MusicTrackId) => void;
-  onVoiceoverEnabledChange: (v: boolean) => void;
   onPhotoUrlsChange: (urls: string[]) => void;
   onNext: () => void;
   canProceed: boolean;
@@ -758,8 +862,6 @@ function UploadStep({
     onPhotoUrlsChange([...PLACEHOLDER_PHOTOS]);
   };
 
-  const formatLabel =
-    format === "reels" ? "9:16 Reels" : format === "square" ? "1:1 Instagram" : "16:9 YouTube";
   const validUrls = photoUrls.map((u) => u.trim()).filter(isValidHttpUrl);
 
   return (
@@ -771,7 +873,7 @@ function UploadStep({
               Projelerim
             </h1>
             <p className="text-sm text-[var(--muted-foreground)] mt-0.5">
-              {validCount} / {MIN_PHOTOS}–{MAX_PHOTOS} fotoğraf URL · {formatLabel}
+              {validCount} / {MIN_PHOTOS}–{MAX_PHOTOS} fotoğraf URL
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -912,166 +1014,42 @@ function UploadStep({
             )}
 
             <div className="demo-card p-4 space-y-3">
-              <div className="demo-section-label">Video şablonu</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {(
-                  [
-                    ["classic", "Klasik", "Koyu · kırmızı vurgu · premium"],
-                    ["dynamic", "Modern", "Teal · turuncu · CarStudio"],
-                  ] as const
-                ).map(([id, label, desc]) => {
-                  const active = templateStyle === id;
+              <div className="demo-section-label flex items-center gap-2">
+                <Brain className="w-4 h-4 text-[var(--primary)]" />
+                Video dili
+              </div>
+              <div className="text-xs text-[var(--muted-foreground)]">
+                Videodaki yazılar bu dile göre hazırlanır.
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {LANGUAGE_OPTIONS.map((opt) => {
+                  const active = videoLanguage === opt.code;
                   return (
                     <button
-                      key={id}
+                      key={opt.code}
                       type="button"
-                      onClick={() => onTemplateStyleChange(id)}
-                      className={`relative flex flex-col items-center gap-1 p-3 rounded-[var(--radius)] border text-center transition-all ${
+                      onClick={() => onVideoLanguageChange(opt.code)}
+                      className={`px-4 py-2 rounded-[var(--radius-pill)] text-sm font-medium border transition-all ${
                         active
-                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]"
+                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
                           : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
                       }`}
                     >
-                      <span className="text-xl leading-none">{id === "classic" ? "🏛️" : "⚡"}</span>
-                      <span
-                        className={`text-xs font-semibold ${active ? "text-[var(--primary)]" : ""}`}
-                      >
-                        {label}
-                      </span>
-                      <span className="text-[10px] text-[var(--muted-foreground)] leading-tight">
-                        {desc}
-                      </span>
-                      {active && (
-                        <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[var(--primary)]" />
-                      )}
+                      {opt.label}
                     </button>
                   );
                 })}
               </div>
-
-              <div className="pt-2 space-y-2">
-                <div className="text-xs text-[var(--muted-foreground)]">Çıktı formatı</div>
-                <div className="flex gap-2">
-                  {(
-                    [
-                      ["reels", "9:16", "Reels / Shorts", "▯"],
-                      ["square", "1:1", "Instagram", "◻"],
-                      ["youtube", "16:9", "YouTube", "▬"],
-                    ] as const
-                  ).map(([value, ratio, sub, icon]) => {
-                    const active = format === value;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => onFormatChange(value)}
-                        className={`flex flex-1 flex-col items-center gap-1 p-3 rounded-[var(--radius)] border text-center transition-all ${
-                          active
-                            ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]"
-                            : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
-                        }`}
-                      >
-                        <span className="text-base leading-none">{icon}</span>
-                        <span
-                          className={`text-xs font-bold ${active ? "text-[var(--primary)]" : ""}`}
-                        >
-                          {ratio}
-                        </span>
-                        <span className="text-[9px] text-[var(--muted-foreground)]">{sub}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="pt-2 space-y-3 border-t border-[var(--border)]">
-                <div className="demo-section-label flex items-center gap-2 pt-1">
-                  <Brain className="w-4 h-4 text-[var(--primary)]" />
-                  Video dili
-                </div>
+              <div className="pt-1 space-y-2">
                 <div className="text-xs text-[var(--muted-foreground)]">
-                  Videodaki yazılar bu dile göre hazırlanır. Seslendirme kapalı olsa da geçerlidir.
+                  Eklemek istediğin bir şey var mı? (opsiyonel)
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {LANGUAGE_OPTIONS.map((opt) => {
-                    const active = videoLanguage === opt.code;
-                    return (
-                      <button
-                        key={opt.code}
-                        type="button"
-                        onClick={() => onVideoLanguageChange(opt.code)}
-                        className={`px-4 py-2 rounded-[var(--radius-pill)] text-sm font-medium border transition-all ${
-                          active
-                            ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
-                            : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="pt-1 space-y-2">
-                  <div className="text-xs text-[var(--muted-foreground)]">
-                    Eklemek istediğin bir şey var mı? (opsiyonel)
-                  </div>
-                  <textarea
-                    value={videoNotes}
-                    onChange={(e) => onVideoNotesChange(e.target.value)}
-                    placeholder={placeholderFor(videoLanguage, "notes")}
-                    className={`${INPUT_CLS} min-h-[90px] resize-y`}
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 space-y-3 border-t border-[var(--border)]">
-                <div className="demo-section-label flex items-center gap-2 pt-1">
-                  <Sparkles className="w-4 h-4 text-[var(--primary)]" />
-                  Müzik
-                </div>
-                <div className="text-xs text-[var(--muted-foreground)]">
-                  Arka plan müziği (telifsiz / lisanslı). Seslendirme açıksa otomatik kısılır.
-                </div>
-                <select
-                  value={musicTrackId}
-                  onChange={(e) => onMusicTrackIdChange(e.target.value as MusicTrackId)}
-                  className={INPUT_CLS}
-                >
-                  {MUSIC_TRACKS.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-                <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--muted)] px-3 py-2.5">
-                  <span className="text-xs text-[var(--muted-foreground)]">
-                    {uiT(videoLanguage, "musicLevel")}
-                  </span>
-                  <span className="text-xs font-semibold text-[var(--foreground)] tabular-nums">
-                    {musicVolume.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="pt-2 space-y-3 border-t border-[var(--border)]">
-                <div className="demo-section-label flex items-center gap-2 pt-1">
-                  <Mic className="w-4 h-4 text-[var(--primary)]" />
-                  {uiT(videoLanguage, "voiceoverSection")}
-                </div>
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={voiceoverEnabled}
-                    onChange={(e) => onVoiceoverEnabledChange(e.target.checked)}
-                    className="mt-1 rounded border-[var(--border)]"
-                  />
-                  <span className="text-sm text-[var(--foreground)] leading-snug">
-                    {uiT(videoLanguage, "voiceoverToggle")}
-                  </span>
-                </label>
-                <div className="text-xs text-[var(--muted-foreground)]">
-                  {uiT(videoLanguage, "voiceoverUsesVideoLang")}
-                </div>
+                <textarea
+                  value={videoNotes}
+                  onChange={(e) => onVideoNotesChange(e.target.value)}
+                  placeholder={placeholderFor(videoLanguage, "notes")}
+                  className={`${INPUT_CLS} min-h-[90px] resize-y`}
+                />
               </div>
             </div>
 
@@ -1132,8 +1110,20 @@ function IdentifyStep({
   onFormChange,
   onRetry,
   onConfirm,
+  onSurprise,
   onBack,
   videoLanguage,
+  templateStyle,
+  onTemplateStyleChange,
+  templateEngine,
+  onTemplateEngineChange,
+  format,
+  onFormatChange,
+  musicTrackId,
+  onMusicTrackIdChange,
+  voiceoverEnabled,
+  onVoiceoverEnabledChange,
+  musicVolume,
 }: {
   photoUrls: string[];
   form: DemoFormData;
@@ -1145,10 +1135,23 @@ function IdentifyStep({
   onFormChange: (field: keyof DemoFormData, value: string) => void;
   onRetry: () => void;
   onConfirm: () => void;
+  onSurprise: () => void;
   onBack: () => void;
   videoLanguage: LanguageCode;
+  templateStyle: TemplateStyle;
+  onTemplateStyleChange: (s: TemplateStyle) => void;
+  templateEngine: TemplateEngine;
+  onTemplateEngineChange: (e: TemplateEngine) => void;
+  format: VideoFormat;
+  onFormatChange: (f: VideoFormat) => void;
+  musicTrackId: MusicTrackId;
+  onMusicTrackIdChange: (v: MusicTrackId) => void;
+  voiceoverEnabled: boolean;
+  onVoiceoverEnabledChange: (v: boolean) => void;
+  musicVolume: number;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [audioSettingsOpen, setAudioSettingsOpen] = useState(false);
   const emptyLabel = selectEmptyLabel(videoLanguage);
   const gearboxOpts = useMemo(() => gearboxOptions(videoLanguage), [videoLanguage]);
   const fuelOpts = useMemo(() => fuelOptions(videoLanguage), [videoLanguage]);
@@ -1168,6 +1171,20 @@ function IdentifyStep({
   const isPriceMissing = showRequiredUi && !form.price.trim();
   const isKmMissing = showRequiredUi && !form.km.trim();
   const pricePlaceholder = pricePlaceholderForCurrency(currency, videoLanguage);
+
+  const videoLookSummary = useMemo(() => {
+    const style = templateStyle === "classic" ? uiT(videoLanguage, "templateClassic") : uiT(videoLanguage, "templateModern");
+    const formatLabel =
+      format === "reels" ? "9:16" : format === "square" ? "1:1" : "16:9";
+    return `${style} · ${formatLabel}`;
+  }, [format, templateStyle, videoLanguage]);
+
+  const selectVideoTemplate = (choice: "classic" | "dynamic") => {
+    onTemplateEngineChange("legacy");
+    onTemplateStyleChange(choice);
+  };
+
+  const activeVideoTemplate = templateStyle;
 
   return (
     <div className="flex-1 overflow-auto px-4 py-6 sm:px-6 bg-[var(--background)]">
@@ -1486,32 +1503,203 @@ function IdentifyStep({
             {uiT(videoLanguage, "reviewAutofill")}
           </div>
         )}
-        <div className="flex flex-col sm:flex-row gap-3">
+
+        <div className="demo-card p-5 space-y-4">
+          <div>
+            <div className="text-sm font-semibold text-[var(--foreground)]">
+              {uiT(videoLanguage, "videoLook")}
+            </div>
+            <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+              {uiT(videoLanguage, "currentVideoLook")}: {videoLookSummary}
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(
+                [
+                  ["classic", uiT(videoLanguage, "templateClassic"), uiT(videoLanguage, "templateClassicDesc"), "🏛️"],
+                  ["dynamic", uiT(videoLanguage, "templateModern"), uiT(videoLanguage, "templateModernDesc"), "⚡"],
+                ] as const
+              ).map(([id, label, desc, icon]) => {
+                const active = activeVideoTemplate === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => selectVideoTemplate(id)}
+                    className={`relative flex flex-col items-center gap-1 p-3 rounded-[var(--radius)] border text-center transition-all ${
+                      active
+                        ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]"
+                        : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
+                    }`}
+                  >
+                    <span className="text-xl leading-none">{icon}</span>
+                    <span className={`text-xs font-semibold ${active ? "text-[var(--primary)]" : ""}`}>
+                      {label}
+                    </span>
+                    <span className="text-[10px] leading-snug opacity-90">{desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+              Çıktı formatı
+            </div>
+            <div className="flex gap-2">
+              {(
+                [
+                  ["reels", "9:16", "Reels / Shorts", "▯"],
+                  ["square", "1:1", "Instagram", "◻"],
+                  ["youtube", "16:9", "YouTube", "▬"],
+                ] as const
+              ).map(([value, ratio, sub, icon]) => {
+                const active = format === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onFormatChange(value)}
+                    className={`flex flex-1 flex-col items-center gap-1 p-3 rounded-[var(--radius)] border text-center transition-all ${
+                      active
+                        ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]"
+                        : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
+                    }`}
+                  >
+                    <span className="text-base leading-none">{icon}</span>
+                    <span
+                      className={`text-xs font-bold ${active ? "text-[var(--primary)]" : ""}`}
+                    >
+                      {ratio}
+                    </span>
+                    <span className="text-[9px] text-[var(--muted-foreground)]">{sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="demo-card overflow-hidden">
           <button
             type="button"
-            onClick={onBack}
-            className="flex items-center justify-center gap-2 py-3 px-5 rounded-[var(--radius-pill)] text-sm font-medium border border-[var(--border)] bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--card)] transition-all"
+            onClick={() => setAudioSettingsOpen((open) => !open)}
+            className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-[var(--muted)]/50 transition-colors"
           >
-            <ArrowLeft className="w-4 h-4" />
-            Geri
+            <div>
+              <div className="text-sm font-semibold text-[var(--foreground)]">
+                Ses ve müzik
+              </div>
+              <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                {resolveMusicTrack(musicTrackId).label}
+                {voiceoverEnabled ? " · Seslendirme açık" : ""}
+              </p>
+            </div>
+            <ChevronDown
+              className={`w-4 h-4 shrink-0 text-[var(--muted-foreground)] transition-transform ${
+                audioSettingsOpen ? "rotate-180" : ""
+              }`}
+            />
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!canConfirm) return;
-              onConfirm();
-            }}
-            disabled={!canConfirm}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[var(--radius-pill)] font-semibold text-base transition-all ${
-              !canConfirm
-                ? "bg-[var(--muted)] text-[var(--muted-foreground)] cursor-not-allowed"
-                : "bg-gradient-to-r from-[var(--teal)] to-[var(--primary)] text-[var(--primary-foreground)] shadow-lg shadow-[var(--primary)]/20 hover:opacity-95"
-            }`}
-          >
-            <Brain className="w-5 h-5" />
-            Onayla ve videoyu oluştur
-            {canConfirm && <ChevronRight className="w-5 h-5" />}
-          </button>
+          {audioSettingsOpen && (
+            <div className="px-5 pb-5 space-y-4 border-t border-[var(--border)]">
+              <div className="pt-4 space-y-3">
+                <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                  Müzik
+                </div>
+                <select
+                  value={musicTrackId}
+                  onChange={(e) => onMusicTrackIdChange(e.target.value as MusicTrackId)}
+                  className={INPUT_CLS}
+                >
+                  {MUSIC_TRACKS.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--muted)] px-3 py-2.5">
+                  <span className="text-xs text-[var(--muted-foreground)]">
+                    {uiT(videoLanguage, "musicLevel")}
+                  </span>
+                  <span className="text-xs font-semibold text-[var(--foreground)] tabular-nums">
+                    {musicVolume.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider flex items-center gap-2">
+                  <Mic className="w-3.5 h-3.5" />
+                  {uiT(videoLanguage, "voiceoverSection")}
+                </div>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={voiceoverEnabled}
+                    onChange={(e) => onVoiceoverEnabledChange(e.target.checked)}
+                    className="mt-1 rounded border-[var(--border)]"
+                  />
+                  <span className="text-sm text-[var(--foreground)] leading-snug">
+                    {uiT(videoLanguage, "voiceoverToggle")}
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex items-center justify-center gap-2 py-3 px-5 rounded-[var(--radius-pill)] text-sm font-medium border border-[var(--border)] bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--card)] transition-all"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Geri
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!canConfirm) return;
+                onSurprise();
+              }}
+              disabled={!canConfirm}
+              title={uiT(videoLanguage, "surpriseMeHint")}
+              className={`flex items-center justify-center gap-2 py-3 px-5 rounded-[var(--radius-pill)] text-sm font-semibold border transition-all ${
+                !canConfirm
+                  ? "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] cursor-not-allowed"
+                  : "border-[var(--primary)]/40 bg-gradient-to-r from-[var(--primary)]/10 to-[var(--teal)]/10 text-[var(--primary)] hover:from-[var(--primary)]/15 hover:to-[var(--teal)]/15 shadow-sm shadow-[var(--primary)]/10"
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              {uiT(videoLanguage, "surpriseMe")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!canConfirm) return;
+                onConfirm();
+              }}
+              disabled={!canConfirm}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[var(--radius-pill)] font-semibold text-base transition-all ${
+                !canConfirm
+                  ? "bg-[var(--muted)] text-[var(--muted-foreground)] cursor-not-allowed"
+                  : "bg-gradient-to-r from-[var(--teal)] to-[var(--primary)] text-[var(--primary-foreground)] shadow-lg shadow-[var(--primary)]/20 hover:opacity-95"
+              }`}
+            >
+              <Brain className="w-5 h-5" />
+              {uiT(videoLanguage, "createVideo")}
+              {canConfirm && <ChevronRight className="w-5 h-5" />}
+            </button>
+          </div>
+          <p className="text-center text-[11px] text-[var(--muted-foreground)] leading-relaxed">
+            {uiT(videoLanguage, "videoSettingsHint")}
+          </p>
         </div>
         <p className="text-center text-xs text-[var(--muted-foreground)]">
           AI: kategori, yorum ve sahne kurgusu (~30–60 sn) + Creatomate render
@@ -1558,10 +1746,13 @@ function PreviewStep({
   analysisResult,
   format,
   templateStyle,
+  templateEngine,
   videoLanguage,
   currency,
   voiceoverEnabled,
   ttsNotice,
+  surpriseSummary,
+  onSurpriseAgain,
   onReset,
 }: {
   videoUrl: string | null;
@@ -1571,10 +1762,13 @@ function PreviewStep({
   analysisResult: PhotoAnalyzeResult | null;
   format: VideoFormat;
   templateStyle: TemplateStyle;
+  templateEngine: TemplateEngine;
   videoLanguage: LanguageCode;
   currency: CurrencyCode;
   voiceoverEnabled: boolean;
   ttsNotice: string;
+  surpriseSummary: string;
+  onSurpriseAgain: () => void;
   onReset: () => void;
 }) {
   const isPortrait = format !== "youtube";
@@ -1618,9 +1812,15 @@ function PreviewStep({
           </h2>
           <p className="text-[var(--muted-foreground)] text-sm mt-1">
             {photoUrls.length} sahne · {format === "reels" ? "9:16 Reels" : format === "square" ? "1:1 Instagram" : "16:9 YouTube"} ·{" "}
-            {templateStyle === "classic" ? "Klasik" : "Modern"} şablon
+            {templateStyle === "classic" ? "Klasik" : "Modern"}{" "}
+            şablon
             {voiceoverEnabled && (
               <span className="block mt-1 text-[11px]">Seslendirme: istendi</span>
+            )}
+            {surpriseSummary && (
+              <span className="block mt-1 text-[11px] text-[var(--primary)]">
+                {uiT(videoLanguage, "surprisePick")}: {surpriseSummary}
+              </span>
             )}
           </p>
         </div>
@@ -1738,6 +1938,15 @@ function PreviewStep({
                 )}
 
                 <div className="pt-2 border-t border-[var(--border)] space-y-2">
+                  <button
+                    type="button"
+                    onClick={onSurpriseAgain}
+                    disabled={Boolean(renderError) && !videoUrl}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold border border-[var(--primary)]/35 bg-gradient-to-r from-[var(--primary)]/10 to-[var(--teal)]/10 text-[var(--primary)] hover:from-[var(--primary)]/15 hover:to-[var(--teal)]/15 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    {uiT(videoLanguage, "surpriseAgain")}
+                  </button>
                   <button
                     type="button"
                     onClick={handleDownload}

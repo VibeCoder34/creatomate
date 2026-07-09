@@ -32,6 +32,7 @@ import {
   parseTtsLanguage,
   type TtsLanguage,
 } from "@/lib/elevenlabs";
+import { buildStudioRenderScript } from "@/lib/studioTemplate/render";
 
 export { aspectRatioForFormat, formatDimensions };
 
@@ -98,6 +99,7 @@ const SCENE_FADE = {
 
 export type VideoFormat = "reels" | "youtube" | "square";
 export type TemplateStyle = "classic" | "dynamic";
+export type TemplateEngine = "legacy" | "studio";
 
 export type CarVideoFormData = {
   dealerName: string;
@@ -125,6 +127,8 @@ export type CarVideoFormData = {
   photos: string[];
   format: VideoFormat;
   templateStyle: TemplateStyle;
+  /** legacy = mevcut şablon, studio = yeni sahne planlayıcı */
+  templateEngine?: TemplateEngine;
   /** Videodaki sabit metinlerin dili */
   videoLanguage?: string;
   /** Özel müzik URL (yoksa varsayılan Creatomate demo müziği) */
@@ -584,7 +588,7 @@ function buildGalleryPhoto(
         source,
         width: "100%",
         height: "100%",
-        fit: "cover",
+        fit: "contain",
         x_alignment: "50%",
         y_alignment: "50%",
       },
@@ -1821,7 +1825,6 @@ function buildSplitDuoScene(
   style: TemplateStyle,
   transitionIndex: number,
 ): RenderElement {
-  const portrait = isPortraitStack(format);
   const { elements } = buildMultiImageBase(duration, format, style);
   const layout = splitLayoutFor(format);
   const photoLayouts = layout.duo.photos;
@@ -1871,7 +1874,6 @@ function buildSplitTrioScene(
   style: TemplateStyle,
   transitionIndex: number,
 ): RenderElement {
-  const portrait = isPortraitStack(format);
   const { elements } = buildMultiImageBase(duration, format, style);
   const layout = splitLayoutFor(format);
 
@@ -1985,7 +1987,6 @@ function buildPhotoShowcaseScene(
   const dynamic = style === "dynamic";
   const palette = colorsFor(style);
   const slideDir = scene.photoNumber % 2 === 0 ? "270°" : "90°";
-  const title = truncateTitle(carTitle, format);
 
   return {
     name: `Showcase-${scene.photoNumber}`,
@@ -2004,45 +2005,6 @@ function buildPhotoShowcaseScene(
         { width: "100%", height: "100%" },
         dynamic ? [slideIn(slideDir, 0)] : [quickFade(0)],
       ),
-      {
-        name: "Photo-Counter",
-        type: "text",
-        track: 3,
-        time: 0,
-        duration,
-        x: "4%",
-        y: "6%",
-        x_anchor: "0%",
-        y_anchor: "0%",
-        text: `${scene.photoNumber} / ${scene.totalPhotos}`,
-        font_family: "Roboto Condensed",
-        font_weight: "700",
-        font_size: "2.4 vmin",
-        letter_spacing: "8%",
-        background_color: "rgba(0,0,0,0.65)",
-        background_x_padding: "45%",
-        background_y_padding: "40%",
-        background_border_radius: "25%",
-        fill_color: palette.text,
-        animations: dynamic ? [popIn(0.05)] : [quickFade(0)],
-      },
-      {
-        name: "Showcase-Title",
-        type: "text",
-        track: 4,
-        time: 0,
-        duration,
-        y: "92%",
-        width: "92%",
-        x_alignment: "50%",
-        y_anchor: "100%",
-        text: title,
-        font_family: "Montserrat",
-        font_weight: "700",
-        font_size: format === "youtube" ? "2.6 vmin" : "3 vmin",
-        fill_color: palette.text,
-        animations: dynamic ? [textSlideUp(0.12)] : [quickFade(0.1)],
-      },
     ],
   };
 }
@@ -2141,6 +2103,10 @@ export function buildRenderScript(
   formData: CarVideoFormData,
   format: VideoFormat,
 ): RenderScript {
+  if (formData.templateEngine === "studio") {
+    return buildStudioRenderScript(formData, format);
+  }
+
   const style = formData.templateStyle === "dynamic" ? "dynamic" : "classic";
   const { width, height } = formatDimensions(format);
   const photos = formData.photos.map((p) => p.trim()).filter(Boolean);

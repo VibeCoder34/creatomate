@@ -67,7 +67,7 @@ Do NOT mix Turkish or English in voiceover_text.
 `;
   }
   return `━━ VOICEOVER LANGUAGE (HIGHEST PRIORITY) ━━
-The field "voiceover_text" on EVERY storyboard shot MUST be written in TURKISH ONLY — doğal konuşma Türkçesi.
+The field "voiceover_text" on EVERY storyboard shot MUST be written in TURKISH ONLY — doğal konuşma Türkçesi. Sadece Türkçe karakterler ve Türkçe kelimeler kullan. Asla araya Almanca, İngilizce vb. diller karıştırma.
 On-screen "comment_tr" (legacy key name) must also be Turkish when VIDEO LANGUAGE is tr. voiceover_text must match VIDEO LANGUAGE.
 
 `;
@@ -94,8 +94,8 @@ function voiceoverPromptAppend(language: LanguageCode): string {
     : "Düşük kilometre, temiz hatlar, hazır araç.";
   const antiMix =
     language === "tr"
-      ? "- Türkçe dışında dil kullanma; İngilizce label'ları voiceover'a kopyalama."
-      : `- Do NOT use Turkish or any non-${langLabel} text in voiceover_text — even if the car listing data is Turkish.`;
+      ? "- Kesinlikle Türkçe dışında başka bir dil (Almanca, İngilizce vb.) KULLANMA. İngilizce etiketleri voiceover'a kopyalama.\n- Sesi okuyacak yapay zekanın sayıları doğru telaffuz etmesi için sayıları RAKAMLA DEĞİL YAZIYLA yaz (Örnek: '1.500.000 TL' yerine 'bir milyon beş yüz bin lira', '125.000 KM' yerine 'yüz yirmi beş bin kilometre' yaz)."
+      : `- Do NOT use Turkish, German, or any non-${langLabel} text in voiceover_text — even if the car listing data is Turkish.\n- For text-to-speech to read numbers correctly, strictly spell out large numbers in words (e.g. 'one million five hundred thousand' instead of '1,500,000').`;
   return `
 
 TASK VOICEOVER — ${langLabel} narration for Text-to-Speech (ElevenLabs)

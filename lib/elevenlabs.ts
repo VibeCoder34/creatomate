@@ -190,7 +190,7 @@ export function buildCreatomateElevenLabsProvider(lang: TtsLanguage): string {
       "ElevenLabs voice ID eksik. Creatomate seslendirmesi için ELEVENLABS_VOICE_ID_TR ayarlayın ve Creatomate hesabınıza ElevenLabs bağlayın.",
     );
   }
-  return `elevenlabs model_id=${modelId} voice_id=${voiceId} stability=0.75`;
+  return `elevenlabs model_id=${modelId} voice_id=${voiceId} stability=0.45 similarity_boost=0.75 use_speaker_boost=true`;
 }
 
 export async function elevenLabsTts(req: ElevenLabsTtsRequest): Promise<ElevenLabsTtsResult> {
@@ -219,7 +219,11 @@ export async function elevenLabsTts(req: ElevenLabsTtsRequest): Promise<ElevenLa
     body: JSON.stringify({
       text,
       model_id: req.modelId,
-      voice_settings: req.voiceSettings,
+      voice_settings: req.voiceSettings ?? {
+        stability: 0.45,
+        similarity_boost: 0.75,
+        use_speaker_boost: true,
+      },
     }),
   });
 

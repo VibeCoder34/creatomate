@@ -27,6 +27,7 @@ export type DemoFormData = {
   plaka: string;
   ilanTarihi: string;
   dealerName?: string;
+  dealerLogoUrl?: string;
   introSubtitle?: string;
   ctaMain?: string;
   address?: string;
@@ -56,8 +57,8 @@ export function formToCreatomatePayload(
   form: DemoFormData,
   photos: string[],
   opts: {
-    format: "reels" | "youtube" | "square";
-    templateStyle: "classic" | "dynamic";
+    format: "reels" | "youtube";
+    templateStyle: import("@/lib/templateRegistry").TemplateId;
     templateEngine?: "legacy" | "studio";
     videoLanguage: LanguageCode;
     currency: CurrencyCode;
@@ -156,5 +157,6 @@ export function formToCreatomatePayload(
     musicSource: opts.musicSource,
     voiceoverAudioSource: opts.voiceoverAudioSource,
     musicVolume: opts.musicVolume,
+    dealerLogoUrl: form.dealerLogoUrl?.trim() || undefined,
   };
 }

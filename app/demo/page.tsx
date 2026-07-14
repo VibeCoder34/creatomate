@@ -48,31 +48,30 @@ import {
 import { formToCreatomatePayload, type DemoFormData } from "@/lib/formToCreatomate";
 import { aspectRatioForFormat } from "@/lib/templateFormat";
 import { orderPhotosWithVoiceover } from "@/lib/photoOrder";
-import {
-  describeSurpriseConfig,
-  generateSurpriseConfig,
-  shuffleArray,
-  type SurpriseConfig,
-} from "@/lib/surpriseMe";
+import { TEMPLATE_REGISTRY, getTemplate } from "@/lib/templateRegistry";
 
 const MIN_PHOTOS = 8;
 const MAX_PHOTOS = 15;
 
 const PLACEHOLDER_PHOTOS = [
-  "https://i0.shbdn.com/photos/92/61/93/x5_132592619341z.avif",
-  "https://i0.shbdn.com/photos/92/61/93/x5_132592619355z.avif",
-  "https://i0.shbdn.com/photos/92/61/93/x5_13259261934un.avif",
-  "https://i0.shbdn.com/photos/92/61/93/x5_13259261934bj.avif",
-  "https://i0.shbdn.com/photos/92/61/93/x5_1325926193org.avif",
-  "https://i0.shbdn.com/photos/92/61/93/x5_1325926193nid.avif",
-  "https://i0.shbdn.com/photos/92/61/93/x5_132592619397p.avif",
-  "https://i0.shbdn.com/photos/92/61/93/x5_13259261939b5.avif",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/saved5857905c5cbab16c949fc4b21436dad33babe348b09f14891980b6e12fb120fc7f5b7ee7-32e8-45af-959c-6b04075a2e79.jpg",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/savedd0a15ef6591a0e1652f2ef8e0946ef7dc13d928fb330e2693215694fe1f6d6152cbab09b-cf6e-4207-9fc4-bc75dc12390d.jpg",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/saved904c08b900d96f8a561e4370e6824cbf076ee62d6e581f41c739cc6da2f5c3ff13b0c5b3-3d27-45ee-a415-165ff2e1bb30.jpg",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/saved4bceb2db05d27cb832f95b5cd57fd6f82edc59fdd3e9f2ced65fc9e5986953acb5fb65b2-d608-4d98-9618-ed5ebf013c14.jpg",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/saved4706aedd9aa1bed49ddf8a9b8ef08df127828b8f2bb919d704c4ca4e0a1b9c369f18a4ed-9901-4fee-aab0-019f59dff597.jpg",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/saved7c2ad426cfdfb48a4c1de6f17dd1197581435f9bbc7ccbc7671b5969548230b8b6d5a012-54a6-4e42-9e68-f8b63658e886.jpg",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/savedf3f64396ef0e3d5acb42600e025711b1d7267b8c0c30bac415772b6c894fe7cb72822757-932e-4685-ba78-1ba0503e9f80.jpg",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/saved515eb3fcec72fa63d2faf3b6739f313a6f9bf03ba2988a226b066ef0075e03c84d37a632-d763-4403-b54d-89038f0f4da8.jpg",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/saved14cb9b68fe1632bc086804d962a0a9e3757d69b05db4489ad48b31b569ef13505bff2f2a-95ea-446b-8921-48be80a2bd0a.jpg",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/savedc1216021dbc16127e884e8a0a4a82aaaac8b98523ed3f1222b9cef437c316e59a4218342-86fb-41f0-8f16-32fdd819aa23.jpg",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/saveda51a6a36dba09e3c107edc0ae215eeff19f1ca4d62edbc4299770c759955d5a427be1908-5c8a-4723-be2f-f1b941d79d16.jpg",
+  "https://carstudio.s3.eu-west-1.amazonaws.com/carstudio/savedf40b40b3ed1c4c0276a5707b1922850f3a099beb430d08f030e9de73be24597faf6e7800-e03a-48e0-8f19-bf3c91e15de7.jpg",
 ];
 
 type Step = "upload" | "identify" | "analyzing" | "preview";
-type TemplateStyle = "classic" | "dynamic";
+type TemplateStyle = "classic-pro" | "elegance" | "sport" | "urban" | "minimal" | "special";
 type TemplateEngine = "legacy" | "studio";
-type VideoFormat = "reels" | "youtube" | "square";
+type VideoFormat = "reels" | "youtube";
 
 const INPUT_CLS =
   "w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-sm text-[var(--foreground)] placeholder-[var(--muted-foreground)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/20 focus:border-[var(--ring)]";
@@ -357,6 +356,7 @@ function emptyForm(lang: LanguageCode = "tr"): DemoFormData {
     agirHasarKayitli: "",
     plaka: "",
     ilanTarihi: "",
+    dealerLogoUrl: "https://cdn.carstudio.ai/images/1a84670aa8a32cdb8462090733463183beae42d3223892525d6a935026c846f8.webp",
   };
 }
 
@@ -384,10 +384,13 @@ export default function DemoPage() {
   const [analysisResult, setAnalysisResult] = useState<PhotoAnalyzeResult | null>(null);
   const [analyzePhase, setAnalyzePhase] = useState("");
   const [analyzeError, setAnalyzeError] = useState("");
+  const [dealerName, setDealerName] = useState("");
+  const [dealerLogoUrl, setDealerLogoUrl] = useState("https://cdn.carstudio.ai/images/1a84670aa8a32cdb8462090733463183beae42d3223892525d6a935026c846f8.webp");
+  const [introSubtitle, setIntroSubtitle] = useState("");
   const [renderError, setRenderError] = useState("");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [format, setFormat] = useState<VideoFormat>("reels");
-  const [templateStyle, setTemplateStyle] = useState<TemplateStyle>("classic");
+  const [templateStyle, setTemplateStyle] = useState<TemplateStyle>("classic-pro");
   const [templateEngine, setTemplateEngine] = useState<TemplateEngine>("legacy");
   const [form, setForm] = useState<DemoFormData>(emptyForm);
   const [isIdentifying, setIsIdentifying] = useState(false);
@@ -399,7 +402,6 @@ export default function DemoPage() {
   const [musicTrackId, setMusicTrackId] = useState<MusicTrackId>("smooth1");
   const [voiceoverEnabled, setVoiceoverEnabled] = useState(false);
   const [voiceoverTtsNotice, setVoiceoverTtsNotice] = useState("");
-  const [surpriseSummary, setSurpriseSummary] = useState("");
   const renderInFlightRef = useRef(false);
 
   const musicVolume = voiceoverEnabled ? 0.35 : 0.8;
@@ -433,8 +435,8 @@ export default function DemoPage() {
         if (!res.ok) {
           setIdentifyError(
             (data as { error?: string }).error ||
-              (data as { details?: string }).details ||
-              `Araç tanıma başarısız (HTTP ${res.status})`
+            (data as { details?: string }).details ||
+            `Araç tanıma başarısız (HTTP ${res.status})`
           );
           return;
         }
@@ -465,13 +467,11 @@ export default function DemoPage() {
   }, [validPhotoUrls, identifyCarFromPhotos]);
 
   const handleCreateVideo = async (options?: {
-    surprise?: SurpriseConfig;
     reuseAnalysis?: boolean;
   }) => {
     if (renderInFlightRef.current) return;
     renderInFlightRef.current = true;
 
-    const surprise = options?.surprise;
     const reuseAnalysis = options?.reuseAnalysis ?? false;
 
     setAnalyzeError("");
@@ -482,36 +482,16 @@ export default function DemoPage() {
       setAnalysisResult(null);
       setOrderedPhotoUrls([]);
     }
-    if (surprise) {
-      setSurpriseSummary(describeSurpriseConfig(surprise, videoLanguage));
-      setFormat(surprise.format);
-      setTemplateStyle(surprise.templateStyle);
-      setTemplateEngine(surprise.templateEngine);
-      setMusicTrackId(surprise.musicTrackId);
-      setVoiceoverEnabled(surprise.voiceoverEnabled);
-      setForm((prev) => ({
-        ...prev,
-        introSubtitle: surprise.introSubtitle,
-        ctaMain: surprise.ctaMain,
-      }));
-    } else {
-      setSurpriseSummary("");
-    }
+
     setStep("analyzing");
 
-    const effectiveFormat = surprise?.format ?? format;
-    const effectiveTemplateStyle = surprise?.templateStyle ?? templateStyle;
-    const effectiveTemplateEngine = surprise?.templateEngine ?? templateEngine;
-    const effectiveMusicTrackId = surprise?.musicTrackId ?? musicTrackId;
-    const effectiveVoiceover = surprise?.voiceoverEnabled ?? voiceoverEnabled;
+    const effectiveFormat = format;
+    const effectiveTemplateStyle = templateStyle;
+    const effectiveTemplateEngine = templateEngine;
+    const effectiveMusicTrackId = musicTrackId;
+    const effectiveVoiceover = voiceoverEnabled;
     const effectiveMusicVolume = effectiveVoiceover ? 0.35 : 0.8;
-    const effectiveForm = surprise
-      ? {
-          ...form,
-          introSubtitle: surprise.introSubtitle,
-          ctaMain: surprise.ctaMain,
-        }
-      : form;
+    const effectiveForm = form;
 
     const aspectRatio = aspectRatioForFormat(effectiveFormat);
 
@@ -519,10 +499,6 @@ export default function DemoPage() {
       let photosForRender = validPhotoUrls;
       let analysis: PhotoAnalyzeResult | null = reuseAnalysis ? analysisResult : null;
       let photoVoiceovers: string[] | undefined;
-
-      if (surprise) {
-        setAnalyzePhase(uiT(videoLanguage, "surprisePreparing"));
-      }
 
       const shouldAnalyze =
         effectiveVoiceover && (!reuseAnalysis || !analysisResult);
@@ -595,8 +571,6 @@ export default function DemoPage() {
           photoVoiceovers = undefined;
         }
         analysis = analysisResult;
-      } else if (surprise?.shufflePhotos && effectiveTemplateEngine === "legacy") {
-        photosForRender = shuffleArray(validPhotoUrls);
       } else if (reuseAnalysis && orderedPhotoUrls.length) {
         photosForRender = orderedPhotoUrls;
       } else {
@@ -666,15 +640,6 @@ export default function DemoPage() {
   };
 
   const handleAnalyze = () => handleCreateVideo();
-  const handleSurprise = () => handleCreateVideo({ surprise: generateSurpriseConfig(videoLanguage) });
-  const handleSurpriseAgain = () => {
-    const surprise = generateSurpriseConfig(videoLanguage);
-    handleCreateVideo({
-      surprise,
-      reuseAnalysis: surprise.voiceoverEnabled && Boolean(analysisResult),
-    });
-  };
-
   const canProceed =
     validPhotoUrls.length >= MIN_PHOTOS && validPhotoUrls.length <= MAX_PHOTOS;
 
@@ -729,8 +694,8 @@ export default function DemoPage() {
             {step === "preview"
               ? uiT(videoLanguage, "preview")
               : step === "identify"
-              ? uiT(videoLanguage, "vehicleInfo")
-              : uiT(videoLanguage, "processing")}
+                ? uiT(videoLanguage, "vehicleInfo")
+                : uiT(videoLanguage, "processing")}
           </p>
         </div>
       )}
@@ -764,7 +729,6 @@ export default function DemoPage() {
             onFormChange={(field, value) => setForm((prev) => ({ ...prev, [field]: value }))}
             onRetry={() => identifyCarFromPhotos(validPhotoUrls)}
             onConfirm={handleAnalyze}
-            onSurprise={handleSurprise}
             onBack={() => setStep("upload")}
             videoLanguage={videoLanguage}
             templateStyle={templateStyle}
@@ -799,14 +763,11 @@ export default function DemoPage() {
             currency={currency}
             voiceoverEnabled={voiceoverEnabled}
             ttsNotice={voiceoverTtsNotice}
-            surpriseSummary={surpriseSummary}
-            onSurpriseAgain={handleSurpriseAgain}
             onReset={() => {
               setAnalysisResult(null);
               setVideoUrl(null);
               setRenderError("");
               setVoiceoverTtsNotice("");
-              setSurpriseSummary("");
               setOrderedPhotoUrls([]);
               setStep("upload");
             }}
@@ -991,11 +952,10 @@ function UploadStep({
 
             {flowRec?.warning && (
               <div
-                className={`rounded-[var(--radius)] border px-4 py-3 text-sm ${
-                  flowRec.mode === "fast_sequence"
-                    ? "border-amber-500/40 bg-amber-500/10 text-amber-600"
-                    : "border-[var(--primary)]/30 bg-[var(--primary)]/8 text-[var(--primary)]"
-                }`}
+                className={`rounded-[var(--radius)] border px-4 py-3 text-sm ${flowRec.mode === "fast_sequence"
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-600"
+                  : "border-[var(--primary)]/30 bg-[var(--primary)]/8 text-[var(--primary)]"
+                  }`}
               >
                 <div className="font-semibold mb-0.5">
                   {flowRec.mode === "fast_sequence" ? "Çok fazla fotoğraf" : "Uzun video modu"}
@@ -1029,11 +989,10 @@ function UploadStep({
                       key={opt.code}
                       type="button"
                       onClick={() => onVideoLanguageChange(opt.code)}
-                      className={`px-4 py-2 rounded-[var(--radius-pill)] text-sm font-medium border transition-all ${
-                        active
-                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
-                          : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
-                      }`}
+                      className={`px-4 py-2 rounded-[var(--radius-pill)] text-sm font-medium border transition-all ${active
+                        ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
+                        : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
+                        }`}
                     >
                       {opt.label}
                     </button>
@@ -1057,11 +1016,10 @@ function UploadStep({
               type="button"
               onClick={onNext}
               disabled={!canProceed}
-              className={`w-full flex items-center justify-center gap-2 py-4 rounded-[var(--radius-pill)] font-semibold text-base transition-all ${
-                !canProceed
-                  ? "bg-[var(--muted)] text-[var(--muted-foreground)] cursor-not-allowed"
-                  : "bg-gradient-to-r from-[var(--teal)] to-[var(--primary)] text-[var(--primary-foreground)] shadow-lg shadow-[var(--primary)]/20 hover:opacity-95"
-              }`}
+              className={`w-full flex items-center justify-center gap-2 py-4 rounded-[var(--radius-pill)] font-semibold text-base transition-all ${!canProceed
+                ? "bg-[var(--muted)] text-[var(--muted-foreground)] cursor-not-allowed"
+                : "bg-gradient-to-r from-[var(--teal)] to-[var(--primary)] text-[var(--primary-foreground)] shadow-lg shadow-[var(--primary)]/20 hover:opacity-95"
+                }`}
             >
               {uiT(videoLanguage, "nextVehicleInfo")}
               {canProceed && <ChevronRight className="w-5 h-5" />}
@@ -1110,7 +1068,6 @@ function IdentifyStep({
   onFormChange,
   onRetry,
   onConfirm,
-  onSurprise,
   onBack,
   videoLanguage,
   templateStyle,
@@ -1135,7 +1092,6 @@ function IdentifyStep({
   onFormChange: (field: keyof DemoFormData, value: string) => void;
   onRetry: () => void;
   onConfirm: () => void;
-  onSurprise: () => void;
   onBack: () => void;
   videoLanguage: LanguageCode;
   templateStyle: TemplateStyle;
@@ -1173,14 +1129,12 @@ function IdentifyStep({
   const pricePlaceholder = pricePlaceholderForCurrency(currency, videoLanguage);
 
   const videoLookSummary = useMemo(() => {
-    const style = templateStyle === "classic" ? uiT(videoLanguage, "templateClassic") : uiT(videoLanguage, "templateModern");
-    const formatLabel =
-      format === "reels" ? "9:16" : format === "square" ? "1:1" : "16:9";
-    return `${style} · ${formatLabel}`;
-  }, [format, templateStyle, videoLanguage]);
+    const t = getTemplate(templateStyle);
+    const formatLabel = format === "reels" ? "9:16" : "16:9";
+    return `${t.name} · ${formatLabel}`;
+  }, [format, templateStyle]);
 
-  const selectVideoTemplate = (choice: "classic" | "dynamic") => {
-    onTemplateEngineChange("legacy");
+  const selectVideoTemplate = (choice: TemplateStyle) => {
     onTemplateStyleChange(choice);
   };
 
@@ -1251,9 +1205,8 @@ function IdentifyStep({
         )}
 
         <div
-          className={`demo-card p-5 space-y-4 transition-opacity ${
-            isIdentifying ? "opacity-50 pointer-events-none" : ""
-          }`}
+          className={`demo-card p-5 space-y-4 transition-opacity ${isIdentifying ? "opacity-50 pointer-events-none" : ""
+            }`}
         >
           <div>
             <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-3">
@@ -1267,10 +1220,10 @@ function IdentifyStep({
                       {field === "carBrand"
                         ? uiT(videoLanguage, "brand")
                         : field === "carModel"
-                        ? uiT(videoLanguage, "model")
-                        : field === "year"
-                        ? uiT(videoLanguage, "year")
-                        : uiT(videoLanguage, "price")}
+                          ? uiT(videoLanguage, "model")
+                          : field === "year"
+                            ? uiT(videoLanguage, "year")
+                            : uiT(videoLanguage, "price")}
                     </span>
                     {showRequiredUi && field === "price" && (
                       <span className="text-[10px] font-semibold text-amber-700 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
@@ -1298,10 +1251,10 @@ function IdentifyStep({
                       field === "carBrand"
                         ? placeholderFor(videoLanguage, "brand")
                         : field === "carModel"
-                        ? placeholderFor(videoLanguage, "model")
-                        : field === "year"
-                        ? placeholderFor(videoLanguage, "year")
-                        : pricePlaceholder
+                          ? placeholderFor(videoLanguage, "model")
+                          : field === "year"
+                            ? placeholderFor(videoLanguage, "year")
+                            : pricePlaceholder
                     }
                     className={INPUT_CLS}
                     inputMode={field === "price" ? "numeric" : undefined}
@@ -1328,6 +1281,36 @@ function IdentifyStep({
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-3 mt-4">
+              Galeri Bilgileri (Opsiyonel)
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+              <div>
+                <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
+                  Galeri Adı
+                </label>
+                <input
+                  value={form.dealerName || ""}
+                  onChange={(e) => onFormChange("dealerName", e.target.value)}
+                  placeholder="Örn: CarStudio Motors"
+                  className={INPUT_CLS}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">
+                  Galeri Logosu (URL)
+                </label>
+                <input
+                  value={form.dealerLogoUrl || ""}
+                  onChange={(e) => onFormChange("dealerLogoUrl", e.target.value)}
+                  placeholder="https://..."
+                  className={INPUT_CLS}
+                />
+              </div>
             </div>
           </div>
 
@@ -1515,30 +1498,30 @@ function IdentifyStep({
           </div>
 
           <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {(
-                [
-                  ["classic", uiT(videoLanguage, "templateClassic"), uiT(videoLanguage, "templateClassicDesc"), "🏛️"],
-                  ["dynamic", uiT(videoLanguage, "templateModern"), uiT(videoLanguage, "templateModernDesc"), "⚡"],
-                ] as const
-              ).map(([id, label, desc, icon]) => {
-                const active = activeVideoTemplate === id;
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {TEMPLATE_REGISTRY.map((template) => {
+                const active = activeVideoTemplate === template.id;
                 return (
                   <button
-                    key={id}
+                    key={template.id}
                     type="button"
-                    onClick={() => selectVideoTemplate(id)}
-                    className={`relative flex flex-col items-center gap-1 p-3 rounded-[var(--radius)] border text-center transition-all ${
-                      active
-                        ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]"
-                        : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
-                    }`}
+                    onClick={() => selectVideoTemplate(template.id)}
+                    className={`group relative overflow-hidden flex flex-col items-center gap-1 p-3 rounded-[var(--radius)] border text-center transition-all ${active
+                      ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]"
+                      : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
+                      }`}
                   >
-                    <span className="text-xl leading-none">{icon}</span>
-                    <span className={`text-xs font-semibold ${active ? "text-[var(--primary)]" : ""}`}>
-                      {label}
-                    </span>
-                    <span className="text-[10px] leading-snug opacity-90">{desc}</span>
+                    <div className="absolute inset-0 z-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                      <img src={template.gifUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                      <div className="absolute inset-0 bg-black/60" /> {/* Dark overlay for readability */}
+                    </div>
+                    <div className="relative z-10 flex flex-col items-center gap-1 pointer-events-none transition-transform group-hover:scale-105">
+                      <span className="text-xl leading-none">{template.icon}</span>
+                      <span className={`text-xs font-semibold ${active ? "text-[var(--primary)]" : "group-hover:text-white"}`}>
+                        {template.name}
+                      </span>
+                      <span className="text-[10px] leading-snug opacity-90 group-hover:text-white/80">{template.description}</span>
+                    </div>
                   </button>
                 );
               })}
@@ -1553,8 +1536,7 @@ function IdentifyStep({
               {(
                 [
                   ["reels", "9:16", "Reels / Shorts", "▯"],
-                  ["square", "1:1", "Instagram", "◻"],
-                  ["youtube", "16:9", "YouTube", "▬"],
+                  ["youtube", "16:9", "YouTube", "▭"],
                 ] as const
               ).map(([value, ratio, sub, icon]) => {
                 const active = format === value;
@@ -1563,11 +1545,10 @@ function IdentifyStep({
                     key={value}
                     type="button"
                     onClick={() => onFormatChange(value)}
-                    className={`flex flex-1 flex-col items-center gap-1 p-3 rounded-[var(--radius)] border text-center transition-all ${
-                      active
-                        ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]"
-                        : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
-                    }`}
+                    className={`flex flex-1 flex-col items-center gap-1 p-3 rounded-[var(--radius)] border text-center transition-all ${active
+                      ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]"
+                      : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
+                      }`}
                   >
                     <span className="text-base leading-none">{icon}</span>
                     <span
@@ -1599,9 +1580,8 @@ function IdentifyStep({
               </p>
             </div>
             <ChevronDown
-              className={`w-4 h-4 shrink-0 text-[var(--muted-foreground)] transition-transform ${
-                audioSettingsOpen ? "rotate-180" : ""
-              }`}
+              className={`w-4 h-4 shrink-0 text-[var(--muted-foreground)] transition-transform ${audioSettingsOpen ? "rotate-180" : ""
+                }`}
             />
           </button>
           {audioSettingsOpen && (
@@ -1610,18 +1590,27 @@ function IdentifyStep({
                 <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                   Müzik
                 </div>
-                <select
-                  value={musicTrackId}
-                  onChange={(e) => onMusicTrackIdChange(e.target.value as MusicTrackId)}
-                  className={INPUT_CLS}
-                >
-                  {MUSIC_TRACKS.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-                <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--muted)] px-3 py-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  {MUSIC_TRACKS.map((t) => {
+                    const active = musicTrackId === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => onMusicTrackIdChange(t.id)}
+                        className={`p-3 rounded-[var(--radius)] border text-left transition-all ${active
+                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]"
+                          : "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/30"
+                          }`}
+                      >
+                        <div className={`text-xs font-semibold ${active ? "text-[var(--primary)]" : ""}`}>
+                          {t.label}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--muted)] px-3 py-2.5 mt-3">
                   <span className="text-xs text-[var(--muted-foreground)]">
                     {uiT(videoLanguage, "musicLevel")}
                   </span>
@@ -1666,31 +1655,13 @@ function IdentifyStep({
               type="button"
               onClick={() => {
                 if (!canConfirm) return;
-                onSurprise();
-              }}
-              disabled={!canConfirm}
-              title={uiT(videoLanguage, "surpriseMeHint")}
-              className={`flex items-center justify-center gap-2 py-3 px-5 rounded-[var(--radius-pill)] text-sm font-semibold border transition-all ${
-                !canConfirm
-                  ? "border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] cursor-not-allowed"
-                  : "border-[var(--primary)]/40 bg-gradient-to-r from-[var(--primary)]/10 to-[var(--teal)]/10 text-[var(--primary)] hover:from-[var(--primary)]/15 hover:to-[var(--teal)]/15 shadow-sm shadow-[var(--primary)]/10"
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              {uiT(videoLanguage, "surpriseMe")}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!canConfirm) return;
                 onConfirm();
               }}
               disabled={!canConfirm}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[var(--radius-pill)] font-semibold text-base transition-all ${
-                !canConfirm
-                  ? "bg-[var(--muted)] text-[var(--muted-foreground)] cursor-not-allowed"
-                  : "bg-gradient-to-r from-[var(--teal)] to-[var(--primary)] text-[var(--primary-foreground)] shadow-lg shadow-[var(--primary)]/20 hover:opacity-95"
-              }`}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[var(--radius-pill)] font-semibold text-base transition-all ${!canConfirm
+                ? "bg-[var(--muted)] text-[var(--muted-foreground)] cursor-not-allowed"
+                : "bg-gradient-to-r from-[var(--teal)] to-[var(--primary)] text-[var(--primary-foreground)] shadow-lg shadow-[var(--primary)]/20 hover:opacity-95"
+                }`}
             >
               <Brain className="w-5 h-5" />
               {uiT(videoLanguage, "createVideo")}
@@ -1751,8 +1722,6 @@ function PreviewStep({
   currency,
   voiceoverEnabled,
   ttsNotice,
-  surpriseSummary,
-  onSurpriseAgain,
   onReset,
 }: {
   videoUrl: string | null;
@@ -1767,8 +1736,6 @@ function PreviewStep({
   currency: CurrencyCode;
   voiceoverEnabled: boolean;
   ttsNotice: string;
-  surpriseSummary: string;
-  onSurpriseAgain: () => void;
   onReset: () => void;
 }) {
   const isPortrait = format !== "youtube";
@@ -1811,16 +1778,11 @@ function PreviewStep({
             {form.carBrand} {form.carModel}
           </h2>
           <p className="text-[var(--muted-foreground)] text-sm mt-1">
-            {photoUrls.length} sahne · {format === "reels" ? "9:16 Reels" : format === "square" ? "1:1 Instagram" : "16:9 YouTube"} ·{" "}
-            {templateStyle === "classic" ? "Klasik" : "Modern"}{" "}
+            {photoUrls.length} sahne · {format === "reels" ? "9:16 Reels" : "16:9 YouTube"} ·{" "}
+            {getTemplate(templateStyle).name}{" "}
             şablon
             {voiceoverEnabled && (
               <span className="block mt-1 text-[11px]">Seslendirme: istendi</span>
-            )}
-            {surpriseSummary && (
-              <span className="block mt-1 text-[11px] text-[var(--primary)]">
-                {uiT(videoLanguage, "surprisePick")}: {surpriseSummary}
-              </span>
             )}
           </p>
         </div>
@@ -1833,9 +1795,8 @@ function PreviewStep({
           }
         >
           <div
-            className={`flex-shrink-0 w-full flex justify-center mx-auto lg:mx-0 ${
-              isPortrait ? "max-w-[420px] sm:max-w-[460px] lg:max-w-[420px]" : "max-w-4xl"
-            }`}
+            className={`flex-shrink-0 w-full flex justify-center mx-auto lg:mx-0 ${isPortrait ? "max-w-[420px] sm:max-w-[460px] lg:max-w-[420px]" : "max-w-4xl"
+              }`}
           >
             <div className="relative w-full" style={isPortrait ? { maxHeight: "78vh" } : undefined}>
               <div className="absolute inset-0 bg-gradient-to-br from-[var(--primary)]/20 to-transparent rounded-2xl blur-3xl -z-10 scale-105" />
@@ -1875,11 +1836,10 @@ function PreviewStep({
           </div>
 
           <div
-            className={`w-full ${
-              isPortrait
-                ? "mx-auto max-w-[420px] sm:max-w-[460px] lg:max-w-[420px]"
-                : "w-full max-w-sm mx-auto lg:mx-0"
-            }`}
+            className={`w-full ${isPortrait
+              ? "mx-auto max-w-[420px] sm:max-w-[460px] lg:max-w-[420px]"
+              : "w-full max-w-sm mx-auto lg:mx-0"
+              }`}
           >
             <div className={isPortrait ? "lg:sticky lg:top-6" : "lg:sticky lg:top-6"}>
               <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 space-y-4">
@@ -1938,15 +1898,6 @@ function PreviewStep({
                 )}
 
                 <div className="pt-2 border-t border-[var(--border)] space-y-2">
-                  <button
-                    type="button"
-                    onClick={onSurpriseAgain}
-                    disabled={Boolean(renderError) && !videoUrl}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold border border-[var(--primary)]/35 bg-gradient-to-r from-[var(--primary)]/10 to-[var(--teal)]/10 text-[var(--primary)] hover:from-[var(--primary)]/15 hover:to-[var(--teal)]/15 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    {uiT(videoLanguage, "surpriseAgain")}
-                  </button>
                   <button
                     type="button"
                     onClick={handleDownload}

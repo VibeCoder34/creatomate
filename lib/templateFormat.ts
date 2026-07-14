@@ -274,21 +274,21 @@ export function collectSpecChunks(data: CarVideoFormData): SpecChunk[] {
 
 export const SPLIT_LAYOUT = {
   youtube: {
-    panel: { x: "0%", y: "0%", width: "40%", height: "100%", x_anchor: "0%" as const, y_anchor: "0%" as const },
-    panelText: { x: "4%", width: "32%" },
-    photoZone: { x: "40%", y: "0%", width: "60%", height: "100%", x_anchor: "0%" as const, y_anchor: "0%" as const },
-    dividerX: "40%",
+    panel: { x: "0%", y: "0%", width: "32%", height: "100%", x_anchor: "0%" as const, y_anchor: "0%" as const },
+    panelText: { x: "4%", width: "26%" },
+    photoZone: { x: "32%", y: "0%", width: "68%", height: "100%", x_anchor: "0%" as const, y_anchor: "0%" as const },
+    dividerX: "32%",
     duo: {
       photos: [
-        { x: "58%", y: "52%", width: "22%", height: "40%" },
-        { x: "82%", y: "52%", width: "22%", height: "40%" },
+        { x: "50%", y: "52%", width: "28%", height: "46%" },
+        { x: "82%", y: "52%", width: "28%", height: "46%" },
       ],
     },
     trio: {
-      hero: { x: "56%", y: "52%", width: "24%", height: "42%" },
+      hero: { x: "50%", y: "52%", width: "30%", height: "46%" },
       stack: [
-        { x: "82%", y: "32%", width: "20%", height: "19%" },
-        { x: "82%", y: "68%", width: "20%", height: "19%" },
+        { x: "82%", y: "30%", width: "24%", height: "22%" },
+        { x: "82%", y: "74%", width: "24%", height: "22%" },
       ],
     },
   },
@@ -299,15 +299,15 @@ export const SPLIT_LAYOUT = {
     photoZoneEnd: "56%",
     duo: {
       photos: [
-        { x: "27%", y: "22%", width: "42%", height: "30%" },
-        { x: "73%", y: "22%", width: "42%", height: "30%" },
+        { x: "50%", y: "14%", width: "100%", height: "28%" },
+        { x: "50%", y: "42%", width: "100%", height: "28%" },
       ],
     },
     trio: {
       photos: [
-        { x: "17%", y: "20%", width: "26%", height: "28%" },
-        { x: "50%", y: "20%", width: "26%", height: "28%" },
-        { x: "83%", y: "20%", width: "26%", height: "28%" },
+        { x: "50%", y: "9%", width: "100%", height: "18%" },
+        { x: "50%", y: "28%", width: "100%", height: "18%" },
+        { x: "50%", y: "47%", width: "100%", height: "18%" },
       ],
     },
   },

@@ -1,6 +1,18 @@
 // Creatomate RenderScript — araba tanıtım videosu (örnek şablona göre)
 
 import {
+  type TemplateId,
+  type TemplatePalette,
+  getTemplatePalette,
+  migrateTemplateStyle,
+  templateTitleFont,
+  templateTitleWeight,
+  templateAccentBarHeight,
+  templateTransitions,
+  templateIntroDuration,
+  templateOutroDuration,
+} from "@/lib/templateRegistry";
+import {
   estimateTextDuration,
   MAX_VIDEO_SECONDS,
   MIN_VIDEO_SECONDS,
@@ -36,6 +48,7 @@ import { buildStudioRenderScript } from "@/lib/studioTemplate/render";
 
 export { aspectRatioForFormat, formatDimensions };
 
+/** @deprecated Eski sabit paletler — geriye uyumluluk için korunuyor */
 export const COLORS = {
   bg: "#0a0a0a",
   panel: "#141414",
@@ -45,17 +58,6 @@ export const COLORS = {
   textMuted: "#aaaaaa",
   textDim: "#888888",
   textSoft: "#d0d0d0",
-} as const;
-
-const COLORS_MODERN = {
-  bg: "#081018",
-  panel: "#0a455a",
-  panelLight: "#0d5a73",
-  accent: "#f27420",
-  text: "#ffffff",
-  textMuted: "#a8c5d4",
-  textDim: "#7fa3b5",
-  textSoft: "#e8f4fa",
 } as const;
 
 type Palette = {
@@ -69,23 +71,40 @@ type Palette = {
   textSoft: string;
 };
 
-function colorsFor(style: TemplateStyle): Palette {
-  return style === "dynamic" ? COLORS_MODERN : COLORS;
+/** Palette'i registry'den alır; eski stil isimleri de desteklenir */
+export function colorsFor(style: TemplateStyle): Palette {
+  const id = migrateTemplateStyle(style);
+  const p = getTemplatePalette(id);
+  return {
+    bg: p.bg,
+    panel: p.panel,
+    panelLight: p.panelLight,
+    accent: p.accent,
+    text: p.text,
+    textMuted: p.textMuted,
+    textDim: p.textDim,
+    textSoft: p.textSoft,
+  };
 }
 
-function isPortraitStack(format: VideoFormat): boolean {
+/** Resolve edilmiş template id'sini döndürür */
+export function resolveTemplateId(style: TemplateStyle): TemplateId {
+  return migrateTemplateStyle(style);
+}
+
+export function isPortraitStack(format: VideoFormat): boolean {
   return format === "reels" || format === "square";
 }
 
 const MUSIC_SOURCE = "https://cdn.creatomate.com/demo/music3.mp3";
 
 const BASE_DURATION = {
-  intro: 2.5,
+  intro: 3.0,
   hero: 4,
   specs: 4.5,
   showcase: 3,
   split: 4,
-  outro: 3,
+  outro: 3.0,
 } as const;
 
 const SCENE_FADE = {
@@ -98,7 +117,7 @@ const SCENE_FADE = {
 // ─── Tipler ──────────────────────────────────────────────────────────────────
 
 export type VideoFormat = "reels" | "youtube" | "square";
-export type TemplateStyle = "classic" | "dynamic";
+export type TemplateStyle = "classic" | "dynamic" | "classic-pro" | "elegance" | "sport" | "urban" | "minimal" | "special";
 export type TemplateEngine = "legacy" | "studio";
 
 export type CarVideoFormData = {
@@ -125,6 +144,8 @@ export type CarVideoFormData = {
   phone: string;
   address: string;
   photos: string[];
+  /** Galerici logosu URL */
+  dealerLogoUrl?: string;
   format: VideoFormat;
   templateStyle: TemplateStyle;
   /** legacy = mevcut şablon, studio = yeni sahne planlayıcı */
@@ -156,7 +177,7 @@ export type RenderScript = {
   elements: RenderElement[];
 };
 
-type RenderElement = Record<string, unknown>;
+export type RenderElement = Record<string, unknown>;
 
 type MiddleScene =
   | {
@@ -194,7 +215,7 @@ export function planMiddleScenes(
   const total = photos.length;
   const rest = photos.slice(galleryStartIndex);
   const scenes: MiddleScene[] = [];
-  const allowTrio = format === "youtube";
+  const allowTrio = format === "youtube" || format === "reels";
   let i = 0;
   let infoVariant = 0;
   let pattern = 0;
@@ -243,7 +264,7 @@ export function splitInfoCycleLength(chunkCount: number): number {
   return Math.max(3, chunkCount + 2);
 }
 
-function normalizeInfoVariant(infoVariant: number, chunkCount: number): number {
+export function normalizeInfoVariant(infoVariant: number, chunkCount: number): number {
   const cycle = splitInfoCycleLength(chunkCount);
   return ((infoVariant % cycle) + cycle) % cycle;
 }
@@ -253,7 +274,7 @@ export function planShowcaseScenes(photos: string[]): MiddleScene[] {
   return planMiddleScenes(photos);
 }
 
-function calcMiddleSceneDuration(sceneCount: number, specSceneCount: number): number {
+export function calcMiddleSceneDuration(sceneCount: number, specSceneCount: number): number {
   const fixed =
     BASE_DURATION.intro +
     BASE_DURATION.hero +
@@ -268,13 +289,13 @@ function calcMiddleSceneDuration(sceneCount: number, specSceneCount: number): nu
   return Math.max(3, needed / sceneCount);
 }
 
-function specFontSize(format: VideoFormat, compact: boolean): string {
+export function specFontSize(format: VideoFormat, compact: boolean): string {
   if (format === "youtube") return compact ? "2.1 vmin" : "2.4 vmin";
   if (format === "square") return compact ? "2.2 vmin" : "2.5 vmin";
   return compact ? "2.3 vmin" : "2.6 vmin";
 }
 
-function specGridMetrics(format: VideoFormat, columns: 1 | 2): { valueOffset: number; rowStep: number } {
+export function specGridMetrics(format: VideoFormat, columns: 1 | 2): { valueOffset: number; rowStep: number } {
   if (columns === 2) {
     return {
       valueOffset: 3.2,
@@ -287,7 +308,7 @@ function specGridMetrics(format: VideoFormat, columns: 1 | 2): { valueOffset: nu
   };
 }
 
-function planSpecGridLayout(
+export function planSpecGridLayout(
   lineCount: number,
   format: VideoFormat,
   scene: "specs" | "split",
@@ -345,7 +366,7 @@ function planSpecGridLayout(
   };
 }
 
-function buildSpecGridElements(
+export function buildSpecGridElements(
   lines: SpecLine[],
   duration: number,
   format: VideoFormat,
@@ -423,7 +444,7 @@ function buildSpecGridElements(
   return elements;
 }
 
-function rectPath(): string {
+export function rectPath(): string {
   return "M 0 0 L 100 0 L 100 100 L 0 100 L 0 0 Z";
 }
 
@@ -434,7 +455,7 @@ const DYNAMIC_TRANSITIONS = [
   "fade",
 ] as const;
 
-function sceneEnter(style: TemplateStyle, sceneIndex = 0): RenderElement {
+export function sceneEnter(style: TemplateStyle, sceneIndex = 0): RenderElement {
   if (style === "classic") {
     return SCENE_FADE;
   }
@@ -459,7 +480,7 @@ function sceneEnter(style: TemplateStyle, sceneIndex = 0): RenderElement {
   return base;
 }
 
-function flashAccent(): RenderElement {
+export function flashAccent(): RenderElement {
   return {
     name: "Flash-Accent",
     type: "shape",
@@ -478,7 +499,7 @@ function flashAccent(): RenderElement {
   };
 }
 
-function quickFade(delay = 0): RenderElement {
+export function quickFade(delay = 0): RenderElement {
   return {
     time: delay,
     duration: 0.35,
@@ -487,7 +508,7 @@ function quickFade(delay = 0): RenderElement {
   };
 }
 
-function popIn(delay = 0): RenderElement {
+export function popIn(delay = 0): RenderElement {
   return {
     time: delay,
     duration: 0.55,
@@ -498,7 +519,7 @@ function popIn(delay = 0): RenderElement {
   };
 }
 
-function textSlideUp(delay = 0, split: "word" | "letter" = "word"): RenderElement {
+export function textSlideUp(delay = 0, split: "word" | "letter" = "word"): RenderElement {
   return {
     time: delay,
     duration: 0.65,
@@ -511,7 +532,7 @@ function textSlideUp(delay = 0, split: "word" | "letter" = "word"): RenderElemen
   };
 }
 
-function slideIn(
+export function slideIn(
   direction: "90°" | "270°" | "0°" | "180°",
   delay = 0,
 ): RenderElement {
@@ -526,7 +547,7 @@ function slideIn(
 }
 
 /** Tam ekran sahneler — araç tam görünsün */
-function buildCarPhoto(
+export function buildCarPhoto(
   name: string,
   source: string,
   duration: number,
@@ -549,7 +570,7 @@ function buildCarPhoto(
 }
 
 /** Galeri hücresi — kırpılmış, dolu, gri bant yok */
-function buildGalleryPhoto(
+export function buildGalleryPhoto(
   name: string,
   source: string,
   duration: number,
@@ -614,7 +635,7 @@ export type SceneTimingOptions = {
   photoVoiceoverDurations?: number[];
 };
 
-function middleSceneBaseDuration(scene: MiddleScene): number {
+export function middleSceneBaseDuration(scene: MiddleScene): number {
   return scene.kind === "showcase" ? BASE_DURATION.showcase : BASE_DURATION.split;
 }
 
@@ -625,8 +646,6 @@ export function buildSceneSchedule(
   timing?: SceneTimingOptions,
   specSceneCount = 1,
 ): SceneScheduleEntry[] {
-  const galleryStartIndex = 1 + specSceneCount;
-  const middleScenes = planMiddleScenes(photos, format, galleryStartIndex);
   const voiceovers = timing?.photoVoiceovers;
   const durations = timing?.photoVoiceoverDurations;
   const hasVoiceover = Boolean(voiceovers?.some((line) => line.trim()));
@@ -635,6 +654,8 @@ export function buildSceneSchedule(
   const drafts: Draft[] = [];
 
   drafts.push({ name: "intro", duration: BASE_DURATION.intro, photoIndices: [] });
+
+  let currentPhotoIdx = 1;
 
   if (photos[0]) {
     const voNeed = voiceBlockDuration([0], voiceovers, durations);
@@ -647,16 +668,26 @@ export function buildSceneSchedule(
 
   if (specSceneCount > 0 && photos.length > 1) {
     for (let c = 0; c < specSceneCount; c++) {
-      const photoIdx = Math.min(1 + c, photos.length - 1);
-      const voNeed = voiceBlockDuration([photoIdx], voiceovers, durations);
+      const pIndices: number[] = [];
+      const neededPhotos = format === "reels" ? 2 : 1;
+      for (let k = 0; k < neededPhotos; k++) {
+        pIndices.push(Math.min(currentPhotoIdx, photos.length - 1));
+        if (currentPhotoIdx < photos.length - 1) {
+          currentPhotoIdx++;
+        }
+      }
+      
+      const voNeed = voiceBlockDuration(pIndices, voiceovers, durations);
       drafts.push({
         name: `spec-chunk-${c}`,
         duration: hasVoiceover ? Math.max(BASE_DURATION.specs, voNeed) : BASE_DURATION.specs,
-        photoIndices: [photoIdx],
+        photoIndices: pIndices,
       });
     }
   }
 
+  const galleryStartIndex = currentPhotoIdx;
+  const middleScenes = planMiddleScenes(photos, format, galleryStartIndex);
   let photoIndex = galleryStartIndex;
   const middleDrafts: Draft[] = [];
 
@@ -750,7 +781,7 @@ export function buildVoiceoverCues(
   return cues;
 }
 
-function hasVoiceover(data: CarVideoFormData): boolean {
+export function hasVoiceover(data: CarVideoFormData): boolean {
   return Boolean(
     data.voiceoverText?.trim() ||
     data.voiceoverAudioSource?.trim() ||
@@ -758,7 +789,7 @@ function hasVoiceover(data: CarVideoFormData): boolean {
   );
 }
 
-function buildMusicElement(data: CarVideoFormData): RenderElement {
+export function buildMusicElement(data: CarVideoFormData): RenderElement {
   const volume = data.musicVolume ?? (hasVoiceover(data) ? 0.25 : 0.8);
   return {
     name: "BG-Music",
@@ -773,7 +804,7 @@ function buildMusicElement(data: CarVideoFormData): RenderElement {
   };
 }
 
-function resolveVoiceoverLanguage(data: CarVideoFormData): TtsLanguage {
+export function resolveVoiceoverLanguage(data: CarVideoFormData): TtsLanguage {
   try {
     return parseTtsLanguage(data.voiceoverLanguage);
   } catch {
@@ -781,7 +812,7 @@ function resolveVoiceoverLanguage(data: CarVideoFormData): TtsLanguage {
   }
 }
 
-function buildVoiceoverElements(
+export function buildVoiceoverElements(
   data: CarVideoFormData,
   schedule: SceneScheduleEntry[],
 ): RenderElement[] {
@@ -846,21 +877,115 @@ function buildVoiceoverElements(
 
 // ─── Intro ───────────────────────────────────────────────────────────────────
 
-function buildIntroScene(
+export function buildIntroScene(
   data: CarVideoFormData,
   duration: number,
   format: VideoFormat,
   style: TemplateStyle,
 ): RenderElement {
-  const dynamic = style === "dynamic";
+  const templateId = resolveTemplateId(style);
   const palette = colorsFor(style);
   const typo = introTypography(format);
   const carTitle = truncateTitle(data.carTitle, format);
   const introSubtitle = truncateSubtitle(data.introSubtitle, format);
   const priceTag = truncateLabel(data.priceTag, format === "youtube" ? 24 : 20);
   const showDealer = !isPlaceholderDealerName(data.dealerName);
+  const hasLogo = Boolean(data.dealerLogoUrl?.trim());
+  const titleFont = templateTitleFont(templateId);
+  const titleWeight = templateTitleWeight(templateId);
+  const accentBarH = templateAccentBarHeight(templateId);
+
+  // İlk fotoğraf arkaplan olarak kullanılır
+  const firstPhoto = data.photos[0];
+
+  const bgElements: RenderElement[] = [];
+
+  if (firstPhoto) {
+    // Fotoğraf arkaplan
+    bgElements.push({
+      name: "Intro-Photo-BG",
+      type: "image",
+      track: 1,
+      time: 0,
+      duration,
+      source: firstPhoto,
+      width: "100%",
+      height: "100%",
+      clip: true,
+      animations: [
+        {
+          time: 0,
+          duration,
+          easing: "linear",
+          type: "scale",
+          fade: false,
+          end_scale: "120%",
+          start_scale: "105%",
+        },
+      ],
+    });
+    // Karartma overlay
+    bgElements.push({
+      name: "Intro-Dark-Overlay",
+      type: "shape",
+      track: 9,
+      time: 0,
+      duration,
+      width: "100%",
+      height: "100%",
+      path: rectPath(),
+      fill_color: [
+        { offset: "0%", color: `rgba(0,0,0,0.72)` },
+        { offset: "100%", color: `rgba(0,0,0,0.85)` },
+      ],
+    });
+  } else {
+    // Fotoğraf yoksa düz gradient
+    bgElements.push({
+      type: "shape",
+      track: 1,
+      time: 0,
+      duration,
+      width: "100%",
+      height: "100%",
+      path: rectPath(),
+      fill_color: [
+        { offset: "0%", color: palette.panel },
+        { offset: "100%", color: palette.panelLight },
+      ],
+    });
+  }
 
   const textElements: RenderElement[] = [];
+
+  // Galeri logosu (varsa)
+  if (hasLogo) {
+    textElements.push({
+      name: "Dealer-Logo",
+      type: "image",
+      track: 10,
+      time: 0,
+      duration,
+      y: format === "youtube" ? "28%" : "30%",
+      width: format === "youtube" ? "18%" : "22%",
+      height: format === "youtube" ? "12%" : "10%",
+      x_anchor: "50%",
+      y_anchor: "50%",
+      source: data.dealerLogoUrl!,
+      fit: "contain",
+      animations: [
+        {
+          time: 0.1,
+          duration: 0.6,
+          easing: "back-out",
+          type: "scale",
+          end_scale: "100%",
+          start_scale: "50%",
+        },
+        quickFade(0.1),
+      ],
+    });
+  }
 
   if (showDealer) {
     textElements.push({
@@ -869,30 +994,28 @@ function buildIntroScene(
       track: 3,
       time: 0,
       duration,
-      y: typo.dealerY,
+      y: hasLogo ? `${parseInt(typo.dealerY) + 6}%` : typo.dealerY,
       width: typo.textWidth,
       x_alignment: "50%",
       y_alignment: "100%",
       text: truncateLabel(data.dealerName, 28),
-      font_family: "Montserrat",
-      font_weight: "800",
+      font_family: titleFont,
+      font_weight: titleWeight,
       font_size: typo.dealerSize,
       letter_spacing: "6%",
       fill_color: palette.text,
-      animations: dynamic
-        ? [textSlideUp(0.05, "letter")]
-        : [
-            {
-              time: 0.1,
-              duration: 0.7,
-              easing: "quadratic-out",
-              type: "text-slide",
-              scope: "split-clip",
-              split: "letter",
-              overlap: "93%",
-              direction: "up",
-            },
-          ],
+      animations: [
+        {
+          time: 0.1,
+          duration: 0.7,
+          easing: "quadratic-out",
+          type: "text-slide",
+          scope: "split-clip",
+          split: "letter",
+          overlap: "93%",
+          direction: "up",
+        },
+      ],
     });
   }
 
@@ -908,11 +1031,21 @@ function buildIntroScene(
       x_alignment: "50%",
       y_alignment: "50%",
       text: carTitle,
-      font_family: "Montserrat",
-      font_weight: "800",
+      font_family: titleFont,
+      font_weight: titleWeight,
       font_size: typo.titleSize,
       fill_color: palette.text,
-      animations: dynamic ? [textSlideUp(0.25)] : [quickFade(0.2)],
+      animations: [
+        {
+          time: 0.2,
+          duration: 0.6,
+          easing: "back-out",
+          type: "scale",
+          end_scale: "100%",
+          start_scale: "60%",
+        },
+        quickFade(0.15),
+      ],
     },
     {
       name: "Intro-Subtitle",
@@ -929,7 +1062,17 @@ function buildIntroScene(
       font_size: typo.subtitleSize,
       letter_spacing: "14%",
       fill_color: palette.accent,
-      animations: dynamic ? [slideIn("0°", 0.35)] : [quickFade(0.35)],
+      animations: [
+        {
+          time: 0.5,
+          duration: 0.5,
+          easing: "quadratic-out",
+          type: "slide",
+          distance: "5%",
+          direction: "0°",
+        },
+        quickFade(0.5),
+      ],
     },
     {
       name: "Intro-Price",
@@ -944,8 +1087,12 @@ function buildIntroScene(
       font_family: "Montserrat",
       font_weight: "800",
       font_size: typo.priceSize,
-      fill_color: palette.accent,
-      animations: dynamic ? [popIn(0.45), quickFade(0.45)] : [quickFade(0.45)],
+      background_color: palette.accent,
+      background_x_padding: "50%",
+      background_y_padding: "35%",
+      background_border_radius: "14%",
+      fill_color: palette.text,
+      animations: [popIn(0.7), quickFade(0.65)],
     },
   );
 
@@ -957,20 +1104,7 @@ function buildIntroScene(
     fill_color: palette.bg,
     animations: [SCENE_FADE],
     elements: [
-      ...(dynamic ? [flashAccent()] : []),
-      {
-        type: "shape",
-        track: 1,
-        time: 0,
-        duration,
-        width: "100%",
-        height: "100%",
-        path: rectPath(),
-        fill_color: [
-          { offset: "0%", color: palette.panel },
-          { offset: "100%", color: palette.panelLight },
-        ],
-      },
+      ...bgElements,
       {
         name: "Accent-Bar",
         type: "shape",
@@ -979,7 +1113,7 @@ function buildIntroScene(
         duration,
         y: typo.accentY,
         width: "18%",
-        height: "0.6 vmin",
+        height: accentBarH,
         x_anchor: "50%",
         y_anchor: "50%",
         path: rectPath(),
@@ -1004,7 +1138,7 @@ function buildIntroScene(
 
 // ─── Hero ────────────────────────────────────────────────────────────────────
 
-function buildHeroScene(
+export function buildHeroScene(
   photoUrl: string,
   data: CarVideoFormData,
   duration: number,
@@ -1146,7 +1280,7 @@ function buildHeroScene(
 
 // ─── Specs ───────────────────────────────────────────────────────────────────
 
-function buildSpecRow(
+export function buildSpecRow(
   icon: string,
   label: string,
   value: string,
@@ -1230,7 +1364,7 @@ function buildSpecRow(
   ];
 }
 
-function buildSpecChunkScene(
+export function buildSpecChunkScene(
   photoUrl: string,
   chunk: SpecChunk,
   duration: number,
@@ -1247,7 +1381,7 @@ function buildSpecChunkScene(
 
   const photoLayout = portrait
     ? { x: "50%", y: format === "square" ? "70%" : "72%", width: "100%" }
-    : { x: "62%", width: "72%" };
+    : { x: "66%", width: "68%" };
 
   const panelLayout = portrait
     ? {
@@ -1258,7 +1392,7 @@ function buildSpecChunkScene(
         x_anchor: "0%",
         y_anchor: "0%",
       }
-    : { x: "0%", y: "0%", width: "40%", height: "100%", x_anchor: "0%", y_anchor: "0%" };
+    : { x: "0%", y: "0%", width: "32%", height: "100%", x_anchor: "0%", y_anchor: "0%" };
 
   const specGrid = buildSpecGridElements(lines, duration, format, style, 4, palette, {
     x: gridPlan.x,
@@ -1299,8 +1433,9 @@ function buildSpecChunkScene(
         path: rectPath(),
         fill_color: [
           { offset: "0%", color: palette.panel },
-          { offset: "100%", color: palette.bg },
+          { offset: "100%", color: portrait ? palette.bg : palette.panelLight },
         ],
+        opacity: portrait ? "100%" : "85%",
         animations: [
           {
             time: 0,
@@ -1336,7 +1471,7 @@ function buildSpecChunkScene(
 
 // ─── Multi-image sahneler ────────────────────────────────────────────────────
 
-function buildPanelSpecChunk(
+export function buildPanelSpecChunk(
   chunk: SpecChunk,
   duration: number,
   format: VideoFormat,
@@ -1360,7 +1495,7 @@ function buildPanelSpecChunk(
 
 type SplitBlock = { id: string; show: boolean; height: number };
 
-function splitStackPositions(
+export function splitStackPositions(
   contentTop: number,
   portrait: boolean,
   blocks: SplitBlock[],
@@ -1398,7 +1533,7 @@ function splitStackPositions(
   return positions;
 }
 
-function buildSplitInfoContent(
+export function buildSplitInfoContent(
   data: CarVideoFormData,
   duration: number,
   format: VideoFormat,
@@ -1661,7 +1796,7 @@ function buildSplitInfoContent(
   return [accentBar, headingEl];
 }
 
-function buildMultiImageBase(
+export function buildMultiImageBase(
   duration: number,
   format: VideoFormat,
   style: TemplateStyle,
@@ -1761,7 +1896,7 @@ function buildMultiImageBase(
   return { portrait, layout, elements };
 }
 
-function buildGalleryHeader(
+export function buildGalleryHeader(
   counter: string,
   duration: number,
   format: VideoFormat,
@@ -1817,7 +1952,7 @@ function buildGalleryHeader(
   ];
 }
 
-function buildSplitDuoScene(
+export function buildSplitDuoScene(
   scene: Extract<MiddleScene, { kind: "split-duo" }>,
   data: CarVideoFormData,
   duration: number,
@@ -1866,7 +2001,7 @@ function buildSplitDuoScene(
   };
 }
 
-function buildSplitTrioScene(
+export function buildSplitTrioScene(
   scene: Extract<MiddleScene, { kind: "split-trio" }>,
   data: CarVideoFormData,
   duration: number,
@@ -1956,7 +2091,7 @@ function buildSplitTrioScene(
   };
 }
 
-function buildMiddleScene(
+export function buildMiddleScene(
   scene: MiddleScene,
   data: CarVideoFormData,
   duration: number,
@@ -1976,7 +2111,7 @@ function buildMiddleScene(
 
 // ─── Foto showcase (tek foto tam ekran) ─────────────────────────────────────
 
-function buildPhotoShowcaseScene(
+export function buildPhotoShowcaseScene(
   scene: Extract<MiddleScene, { kind: "showcase" }>,
   duration: number,
   carTitle: string,
@@ -2011,16 +2146,168 @@ function buildPhotoShowcaseScene(
 
 // ─── Outro ───────────────────────────────────────────────────────────────────
 
-function buildOutroScene(
+export function buildOutroScene(
   data: CarVideoFormData,
   duration: number,
   format: VideoFormat,
   style: TemplateStyle,
   transitionIndex: number,
 ): RenderElement {
-  const dynamic = style === "dynamic";
   const palette = colorsFor(style);
   const typo = outroTypography(format);
+  const hasLogo = Boolean(data.dealerLogoUrl?.trim());
+  const showDealer = !isPlaceholderDealerName(data.dealerName);
+
+  // Logo varsa CTA'yı biraz aşağı kaydır
+  const ctaYVal = hasLogo ? parseInt(typo.ctaY) + 8 : parseInt(typo.ctaY);
+  const phoneYVal = hasLogo ? parseInt(typo.phoneY) + 8 : parseInt(typo.phoneY);
+  const addressYVal = hasLogo ? parseInt(typo.addressY) + 8 : parseInt(typo.addressY);
+
+  const elements: RenderElement[] = [
+    // Gradient arkaplan
+    {
+      type: "shape",
+      track: 1,
+      time: 0,
+      duration,
+      width: "100%",
+      height: "100%",
+      path: rectPath(),
+      fill_color: [
+        { offset: "0%", color: palette.panelLight },
+        { offset: "100%", color: palette.bg },
+      ],
+    },
+  ];
+
+  // Galeri logosu
+  if (hasLogo) {
+    elements.push({
+      name: "Outro-Logo",
+      type: "image",
+      track: 8,
+      time: 0,
+      duration,
+      y: format === "youtube" ? "22%" : "20%",
+      width: format === "youtube" ? "18%" : "22%",
+      height: format === "youtube" ? "12%" : "10%",
+      x_anchor: "50%",
+      y_anchor: "50%",
+      source: data.dealerLogoUrl!,
+      fit: "contain",
+      animations: [popIn(0), quickFade(0)],
+    });
+  } else if (showDealer) {
+    elements.push({
+      name: "Outro-Dealer-Name",
+      type: "text",
+      track: 8,
+      time: 0,
+      duration,
+      y: format === "youtube" ? "22%" : "20%",
+      width: "90%",
+      x_alignment: "50%",
+      y_alignment: "50%",
+      text: truncateLabel(data.dealerName, 28),
+      font_family: "Montserrat",
+      font_weight: "800",
+      font_size: format === "youtube" ? "3.5 vmin" : "4 vmin",
+      letter_spacing: "5%",
+      fill_color: palette.textMuted,
+      animations: [quickFade(0)],
+    });
+  }
+
+  // Accent divider
+  elements.push({
+    name: "Outro-Divider",
+    type: "shape",
+    track: 9,
+    time: 0.2,
+    duration: duration - 0.2,
+    y: `${ctaYVal - 5}%`,
+    width: "12%",
+    height: "0.5 vmin",
+    x_anchor: "50%",
+    y_anchor: "50%",
+    path: rectPath(),
+    fill_color: palette.accent,
+    animations: [
+      {
+        time: 0,
+        duration: 0.4,
+        easing: "quadratic-out",
+        type: "scale",
+        fade: false,
+        x_anchor: "50%",
+        end_scale: "100% 100%",
+        start_scale: "0% 100%",
+      },
+    ],
+  });
+
+  // CTA
+  elements.push(
+    {
+      name: "CTA-Main",
+      type: "text",
+      track: 2,
+      time: 0,
+      duration,
+      y: `${ctaYVal}%`,
+      width: "90%",
+      x_alignment: "50%",
+      y_alignment: "100%",
+      text: truncateLabel(data.ctaMain, 28),
+      font_family: "Montserrat",
+      font_weight: "800",
+      font_size: typo.ctaSize,
+      fill_color: palette.text,
+      animations: [
+        {
+          time: 0.1,
+          duration: 0.6,
+          easing: "back-out",
+          type: "scale",
+          end_scale: "100%",
+          start_scale: "55%",
+        },
+        quickFade(0.1),
+      ],
+    },
+    {
+      name: "Phone",
+      type: "text",
+      track: 3,
+      time: 0,
+      duration,
+      y: `${phoneYVal}%`,
+      width: "90%",
+      x_alignment: "50%",
+      text: truncateLabel(data.phone, 22),
+      font_family: "Roboto Condensed",
+      font_weight: "700",
+      font_size: typo.phoneSize,
+      letter_spacing: "5%",
+      fill_color: palette.accent,
+      animations: [quickFade(0.3)],
+    },
+    {
+      name: "Address",
+      type: "text",
+      track: 4,
+      time: 0,
+      duration,
+      y: `${addressYVal}%`,
+      width: "90%",
+      x_alignment: "50%",
+      text: truncateSubtitle(data.address, format),
+      font_family: "Roboto Condensed",
+      font_size: typo.addressSize,
+      fill_color: palette.textMuted,
+      animations: [quickFade(0.5)],
+    },
+  );
 
   return {
     name: "Outro",
@@ -2029,73 +2316,16 @@ function buildOutroScene(
     duration,
     fill_color: palette.bg,
     animations: [sceneEnter(style, transitionIndex)],
-    elements: [
-      ...(dynamic ? [flashAccent()] : []),
-      {
-        type: "shape",
-        track: 1,
-        time: 0,
-        duration,
-        width: "100%",
-        height: "100%",
-        path: rectPath(),
-        fill_color: [
-          { offset: "0%", color: palette.panelLight },
-          { offset: "100%", color: palette.bg },
-        ],
-      },
-      {
-        name: "CTA-Main",
-        type: "text",
-        track: 2,
-        time: 0,
-        duration,
-        y: typo.ctaY,
-        width: "90%",
-        x_alignment: "50%",
-        y_alignment: "100%",
-        text: truncateLabel(data.ctaMain, 28),
-        font_family: "Montserrat",
-        font_weight: "800",
-        font_size: typo.ctaSize,
-        fill_color: palette.text,
-        animations: dynamic ? [popIn(0), quickFade(0)] : [quickFade(0)],
-      },
-      {
-        name: "Phone",
-        type: "text",
-        track: 3,
-        time: 0,
-        duration,
-        y: typo.phoneY,
-        width: "90%",
-        x_alignment: "50%",
-        text: truncateLabel(data.phone, 22),
-        font_family: "Roboto Condensed",
-        font_weight: "700",
-        font_size: typo.phoneSize,
-        letter_spacing: "5%",
-        fill_color: palette.accent,
-        animations: dynamic ? [textSlideUp(0.15)] : [quickFade(0.1)],
-      },
-      {
-        name: "Address",
-        type: "text",
-        track: 4,
-        time: 0,
-        duration,
-        y: typo.addressY,
-        width: "90%",
-        x_alignment: "50%",
-        text: truncateSubtitle(data.address, format),
-        font_family: "Roboto Condensed",
-        font_size: typo.addressSize,
-        fill_color: palette.textMuted,
-        animations: dynamic ? [slideIn("0°", 0.25)] : [quickFade(0.2)],
-      },
-    ],
+    elements,
   };
 }
+
+import { buildClassicProScript } from "./templates/classicPro";
+import { buildEleganceScript } from "./templates/elegance";
+import { buildSportScript } from "./templates/sport";
+import { buildUrbanScript } from "./templates/urban";
+import { buildMinimalScript } from "./templates/minimal";
+import { buildSpecialScript } from "./templates/special";
 
 // ─── Ana üretici ─────────────────────────────────────────────────────────────
 
@@ -2107,86 +2337,24 @@ export function buildRenderScript(
     return buildStudioRenderScript(formData, format);
   }
 
-  const style = formData.templateStyle === "dynamic" ? "dynamic" : "classic";
-  const { width, height } = formatDimensions(format);
-  const photos = formData.photos.map((p) => p.trim()).filter(Boolean);
-  const specChunks = collectSpecChunks(formData);
-  const specSceneCount = Math.min(specChunks.length, MAX_SPEC_SCENES);
-  const galleryStartIndex = specSceneCount > 0 ? 1 + specSceneCount : 1;
-  const middleScenes = planMiddleScenes(photos, format, galleryStartIndex);
-
-  const schedule = buildSceneSchedule(photos, format, {
-    photoVoiceovers: formData.photoVoiceovers,
-    photoVoiceoverDurations: formData.photoVoiceoverDurations,
-  }, specSceneCount);
-
-  let transitionIndex = 0;
-
-  const sceneElements = schedule.map((entry) => {
-    const duration = entry.duration;
-    let element: RenderElement;
-
-    if (entry.name === "intro") {
-      element = buildIntroScene(formData, duration, format, style);
-    } else if (entry.name === "hero") {
-      element = buildHeroScene(
-        photos[0],
-        formData,
-        duration,
-        format,
-        style,
-        ++transitionIndex,
-      );
-    } else if (entry.name.startsWith("spec-chunk-")) {
-      const chunkIdx = Number.parseInt(entry.name.replace("spec-chunk-", ""), 10);
-      const chunk = specChunks[chunkIdx] ?? specChunks[0]!;
-      const photoUrl = photos[entry.photoIndices[0] ?? 1] ?? photos[1] ?? "";
-      element = buildSpecChunkScene(
-        photoUrl,
-        chunk,
-        duration,
-        format,
-        style,
-        ++transitionIndex,
-      );
-    } else if (entry.name === "outro") {
-      element = buildOutroScene(
-        formData,
-        duration,
-        format,
-        style,
-        ++transitionIndex,
-      );
-    } else {
-      const middleIdx = Number.parseInt(entry.name.replace("middle-", ""), 10);
-      const scene = middleScenes[middleIdx];
-      if (!scene) {
-        element = { name: entry.name, type: "composition", track: 2, duration, fill_color: COLORS.bg };
-      } else {
-        element = buildMiddleScene(
-          scene,
-          formData,
-          duration,
-          format,
-          style,
-          ++transitionIndex,
-        );
-      }
-    }
-
-    return { ...element, time: entry.startTime };
-  });
-
-  const audioElements: RenderElement[] = [buildMusicElement(formData)];
-  audioElements.push(...buildVoiceoverElements(formData, schedule));
-
-  return {
-    output_format: "mp4",
-    width,
-    height,
-    frame_rate: 30,
-    elements: [...sceneElements, ...audioElements],
-  };
+  const styleId = resolveTemplateId(formData.templateStyle);
+  
+  switch (styleId) {
+    case "classic-pro":
+      return buildClassicProScript(formData, format);
+    case "elegance":
+      return buildEleganceScript(formData, format);
+    case "sport":
+      return buildSportScript(formData, format);
+    case "urban":
+      return buildUrbanScript(formData, format);
+    case "minimal":
+      return buildMinimalScript(formData, format);
+    case "special":
+      return buildSpecialScript(formData, format);
+    default:
+      return buildClassicProScript(formData, format);
+  }
 }
 
 export function distributePhotos(photos: string[]): MiddleScene[] {

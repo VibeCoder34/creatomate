@@ -71,10 +71,15 @@ function parseLooseNumber(raw: string): number | null {
       s = s.replace(",", ".");
     }
   } else {
-    // Only dot present: treat as thousands if 3-digit trailing groups and multiple dots.
+    // Only dot present: treat as thousands if 3-digit trailing groups and multiple dots, OR a single dot with exactly 3 trailing digits.
     const dotParts = s.split(".");
     if (dotParts.length > 2) {
       s = dotParts.join("");
+    } else if (dotParts.length === 2) {
+      const last = dotParts[1] ?? "";
+      if (last.length === 3) {
+        s = dotParts.join("");
+      }
     }
   }
 

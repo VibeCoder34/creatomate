@@ -1,8 +1,8 @@
 import type { LanguageCode } from "@/lib/languages";
 import type { MusicTrackId } from "@/lib/music";
 
-export type VideoFormat = "reels" | "youtube" | "square";
-export type TemplateStyle = "classic" | "dynamic";
+export type VideoFormat = "reels" | "youtube";
+export type TemplateStyle = "classic" | "dynamic" | "classic-pro" | "elegance" | "sport" | "urban" | "minimal";
 
 export type TemplateEngine = "legacy" | "studio";
 
@@ -17,9 +17,9 @@ export type SurpriseConfig = {
   shufflePhotos: boolean;
 };
 
-const FORMATS: readonly VideoFormat[] = ["reels", "youtube", "square"];
+const FORMATS: readonly VideoFormat[] = ["reels", "youtube"];
 const ENGINES: readonly TemplateEngine[] = ["legacy"];
-const STYLES: readonly TemplateStyle[] = ["classic", "dynamic"];
+const STYLES: readonly TemplateStyle[] = ["classic-pro", "elegance", "sport", "urban", "minimal"];
 
 const MUSIC_IDS: readonly MusicTrackId[] = ["smooth1", "smooth2", "smooth3"];
 
@@ -152,9 +152,7 @@ export function describeSurpriseConfig(
   const formatLabel =
     config.format === "reels"
       ? "9:16 Reels"
-      : config.format === "square"
-        ? "1:1 Instagram"
-        : "16:9 YouTube";
+      : "16:9 YouTube";
 
   const styleLabel =
     config.templateStyle === "classic"

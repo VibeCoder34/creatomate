@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
           ? "square"
           : "reels";
     const templateStyle: TemplateStyle =
-      body.templateStyle === "dynamic" ? "dynamic" : "classic";
+      (body.templateStyle as TemplateStyle) ?? "classic";
     const templateEngine: TemplateEngine =
       body.templateEngine === "studio" ? "studio" : "legacy";
 
@@ -207,6 +207,7 @@ export async function POST(request: NextRequest) {
       voiceoverLanguage,
       voiceoverAudioSource,
       musicVolume: body.musicVolume,
+      dealerLogoUrl: (body as Record<string, unknown>).dealerLogoUrl as string | undefined,
     };
 
     const source = buildRenderScript(formData, format);
